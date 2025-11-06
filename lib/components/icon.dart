@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 import '../channel/params.dart';
@@ -194,12 +195,14 @@ class _CNIconState extends State<CNIcon> {
             creationParamsCodec: const StandardMessageCodec(),
             creationParams: creationParams,
             onPlatformViewCreated: _onPlatformViewCreated,
+            gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
           )
         : AppKitView(
             viewType: viewType,
             creationParamsCodec: const StandardMessageCodec(),
             creationParams: creationParams,
             onPlatformViewCreated: _onPlatformViewCreated,
+            gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
           );
 
     // Ensure the platform view always has finite constraints

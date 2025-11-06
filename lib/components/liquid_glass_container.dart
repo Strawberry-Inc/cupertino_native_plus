@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import '../style/glass_effect.dart';
-import '../utils/version_detector.dart';
+
 import '../channel/params.dart';
+import '../style/glass_effect.dart';
+import '../utils/theme_helper.dart';
+import '../utils/version_detector.dart';
 
 /// A container that applies Liquid Glass effects to its child widget.
 ///
@@ -33,6 +36,15 @@ class LiquidGlassContainer extends StatefulWidget {
 
 class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
   MethodChannel? _channel;
+  bool? _lastIsDark;
+
+  bool get _isDark => ThemeHelper.isDark(context);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncBrightnessIfNeeded();
+  }
 
   @override
   void didUpdateWidget(LiquidGlassContainer oldWidget) {
@@ -44,7 +56,8 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
 
   @override
   Widget build(BuildContext context) {
-    final isIOSOrMacOS = defaultTargetPlatform == TargetPlatform.iOS ||
+    final isIOSOrMacOS =
+        defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS;
     final shouldUseNative = isIOSOrMacOS && PlatformVersion.supportsLiquidGlass;
 
@@ -64,7 +77,8 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
     final creationParams = <String, dynamic>{
       'effect': widget.config.effect.name,
       'shape': widget.config.shape.name,
-      if (widget.config.cornerRadius != null) 'cornerRadius': widget.config.cornerRadius,
+      if (widget.config.cornerRadius != null)
+        'cornerRadius': widget.config.cornerRadius,
       if (widget.config.tint != null)
         'tint': resolveColorToArgb(widget.config.tint!, context),
       'interactive': widget.config.interactive,
@@ -76,12 +90,14 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
             creationParams: creationParams,
             creationParamsCodec: const StandardMessageCodec(),
             onPlatformViewCreated: _onCreated,
+            gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
           )
         : AppKitView(
             viewType: viewType,
             creationParams: creationParams,
             creationParamsCodec: const StandardMessageCodec(),
             onPlatformViewCreated: _onCreated,
+            gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
           );
 
     // Use a Stack where the child determines the size
@@ -97,9 +113,7 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
         fit: StackFit.passthrough,
         children: [
           // Glass effect background from native view - sized to match child
-          Positioned.fill(
-            child: platformView,
-          ),
+          Positioned.fill(child: platformView),
           // Child content rendered on top - determines the size
           // This will size the Stack, and Positioned.fill will match it
           widget.child,
@@ -114,6 +128,7 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
       // Handle any method calls from native side if needed
       return null;
     });
+    _lastIsDark = _isDark;
   }
 
   Future<void> _updateConfig() async {
@@ -124,7 +139,8 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
       await channel.invokeMethod('updateConfig', {
         'effect': widget.config.effect.name,
         'shape': widget.config.shape.name,
-        if (widget.config.cornerRadius != null) 'cornerRadius': widget.config.cornerRadius,
+        if (widget.config.cornerRadius != null)
+          'cornerRadius': widget.config.cornerRadius,
         if (widget.config.tint != null)
           'tint': resolveColorToArgb(widget.config.tint!, context),
         'interactive': widget.config.interactive,
@@ -133,5 +149,16 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
       // Ignore errors - view might not be ready yet
     }
   }
-}
 
+  Future<void> _syncBrightnessIfNeeded() async {
+    final channel = _channel;
+    if (channel == null) return;
+
+    final isDark = _isDark;
+    if (_lastIsDark != isDark) {
+      _lastIsDark = isDark;
+      // Trigger a view refresh to pick up the new system appearance
+      await _updateConfig();
+    }
+  }
+}
