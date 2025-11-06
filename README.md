@@ -2,11 +2,7 @@
 
 Native Liquid Glass widgets for iOS and macOS in Flutter with pixel‑perfect fidelity.
 
-This plugin hosts real UIKit/AppKit controls inside Flutter using Platform Views and method channels. It matches native look/feel perfectly while still fitting naturally into Flutter code.
-
-Does it work and is it fast? Yes. Is it a vibe-coded Frankenstein's monster patched together with duct tape? Also yes.
-
-This package is a proof of concept for bringing Liquid Glass to Flutter. Contributions are most welcome. What we have here can serve as a great starting point for building a complete, polished library. The vision for this package is to bridge the gap until we have a good, new Cupertino library written entirely in Flutter. To move toward completeness, we can also improve parts that are easy to write in Flutter to match the new Liquid Glass style (e.g., improved `CupertinoScaffold`, theme, etc.).
+This package provides native iOS and macOS widgets with Liquid Glass effects for Flutter applications. It uses Platform Views to embed real UIKit/AppKit controls inside Flutter, ensuring pixel-perfect fidelity with native look and feel while still fitting naturally into Flutter code.
 
 ## About This Package
 
@@ -24,16 +20,12 @@ Then run `flutter pub get`.
 
 Ensure your platform minimums are compatible:
 
-- iOS `platform :ios, '14.0'`
+- iOS `platform :ios, '13.0'`
 - macOS 11.0+
 
 **Note:** This package includes SVGKit dependency for native SVG rendering support.
 
-You will also need to install the Xcode 26 beta and use `xcode-select` to set it as your default.
-
-```bash
-sudo xcode-select -s /Applications/Xcode-beta.app
-```
+**Liquid Glass Effects:** Native Liquid Glass effects require iOS 26+ or macOS 26+. On older versions, the package falls back to standard button styles and effects.
 
 ### Initialization
 
@@ -536,16 +528,22 @@ CNTabBar(
 )
 ```
 
-## What's left to do?
-This package has evolved significantly and now provides comprehensive native widget support with Liquid Glass effects. Future improvements include:
+## Future Improvements
+
+This package provides comprehensive native widget support with Liquid Glass effects. Future improvements include:
 
 - Adding more native components (DatePicker, ActionSheet, etc.)
 - Extending SVG support to remaining components (SegmentedControl, Slider, Switch)
 - Reviewing the Flutter APIs to ensure consistency and eliminate redundancies
 - Extending the flexibility and styling options of the widgets
-- Investigate how to best combine scroll views with the native components
+- Investigating how to best combine scroll views with the native components
 - Performance optimizations for SVG rendering and caching
 - Additional Liquid Glass effect variants and configurations
 
-## How was this done?
-Pretty much vibe-coded with Codex and GPT-5. 😅
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This package is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
