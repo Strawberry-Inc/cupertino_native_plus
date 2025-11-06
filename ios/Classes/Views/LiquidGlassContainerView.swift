@@ -137,8 +137,6 @@ class LiquidGlassContainerPlatformView: NSObject, FlutterPlatformView {
 
 @available(iOS 26.0, *)
 struct LiquidGlassContainerSwiftUI: View {
-  @Environment(\.colorScheme) var colorScheme
-  
   let effect: String
   let shape: String
   let cornerRadius: CGFloat?

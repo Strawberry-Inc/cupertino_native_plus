@@ -48,6 +48,8 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
       }
     }
     
+    print("LiquidGlassContainer init - isDark: \(isDark)")
+    
     // Create SwiftUI view
     let glassView = LiquidGlassContainerSwiftUI(
       effect: effect,
@@ -119,6 +121,8 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
       isDark = isDarkBool
     }
     
+    print("LiquidGlassContainer updateConfig - isDark: \(isDark)")
+    
     // Update the SwiftUI view
     let newGlassView = LiquidGlassContainerSwiftUI(
       effect: effect,
@@ -139,8 +143,6 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
 
 @available(macOS 26.0, *)
 struct LiquidGlassContainerSwiftUI: View {
-  @Environment(\.colorScheme) var colorScheme
-  
   let effect: String
   let shape: String
   let cornerRadius: CGFloat?
@@ -152,7 +154,7 @@ struct LiquidGlassContainerSwiftUI: View {
       shapeForConfig()
         .fill(Color.clear)
         .contentShape(shapeForConfig())
-        .allowsHitTesting(interactive)
+        .allowsHitTesting(false)
         .glassEffect(glassEffectForConfig(), in: shapeForConfig())
         .frame(width: geometry.size.width, height: geometry.size.height)
     }
