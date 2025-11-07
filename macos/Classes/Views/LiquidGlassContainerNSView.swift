@@ -20,6 +20,7 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
     var cornerRadius: CGFloat? = nil
     var tint: NSColor? = nil
     var interactive: Bool = false
+    var isDark: Bool = false
     
     if let dict = args as? [String: Any] {
       if let effectStr = dict["effect"] as? String {
@@ -42,7 +43,12 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
       if let interactiveBool = dict["interactive"] as? Bool {
         interactive = interactiveBool
       }
+      if let isDarkBool = dict["isDark"] as? Bool {
+        isDark = isDarkBool
+      }
     }
+    
+    print("LiquidGlassContainer init - isDark: \(isDark)")
     
     // Create SwiftUI view
     let glassView = LiquidGlassContainerSwiftUI(
@@ -56,6 +62,7 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
     self.hostingController = NSHostingController(rootView: glassView)
     self.hostingController.view.wantsLayer = true
     self.hostingController.view.layer?.backgroundColor = NSColor.clear.cgColor
+    self.hostingController.view.appearance = NSAppearance(named: isDark ? .darkAqua : .aqua)
     
     super.init()
     
@@ -88,6 +95,7 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
     var cornerRadius: CGFloat? = nil
     var tint: NSColor? = nil
     var interactive: Bool = false
+    var isDark: Bool = false
     
     if let effectStr = dict["effect"] as? String {
       effect = effectStr
@@ -109,6 +117,11 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
     if let interactiveBool = dict["interactive"] as? Bool {
       interactive = interactiveBool
     }
+    if let isDarkBool = dict["isDark"] as? Bool {
+      isDark = isDarkBool
+    }
+    
+    print("LiquidGlassContainer updateConfig - isDark: \(isDark)")
     
     // Update the SwiftUI view
     let newGlassView = LiquidGlassContainerSwiftUI(
@@ -120,6 +133,7 @@ class LiquidGlassContainerNSView: NSObject, FlutterPlatformView {
     )
     
     hostingController.rootView = newGlassView
+    hostingController.view.appearance = NSAppearance(named: isDark ? .darkAqua : .aqua)
   }
   
   func view() -> NSView {
@@ -140,7 +154,7 @@ struct LiquidGlassContainerSwiftUI: View {
       shapeForConfig()
         .fill(Color.clear)
         .contentShape(shapeForConfig())
-        .allowsHitTesting(interactive)
+        .allowsHitTesting(false)
         .glassEffect(glassEffectForConfig(), in: shapeForConfig())
         .frame(width: geometry.size.width, height: geometry.size.height)
     }

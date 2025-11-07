@@ -58,6 +58,7 @@ class LiquidGlassContainerPlatformView: NSObject, FlutterPlatformView {
     
     self.hostingController = UIHostingController(rootView: glassView)
     self.hostingController.view.backgroundColor = .clear
+    self.hostingController.overrideUserInterfaceStyle = isDark ? .dark : .light
     
     super.init()
     
@@ -95,6 +96,7 @@ class LiquidGlassContainerPlatformView: NSObject, FlutterPlatformView {
     var cornerRadius: CGFloat? = nil
     var tint: UIColor? = nil
     var interactive: Bool = false
+    var isDark: Bool = false
     
     if let effectStr = dict["effect"] as? String {
       effect = effectStr
@@ -116,6 +118,9 @@ class LiquidGlassContainerPlatformView: NSObject, FlutterPlatformView {
     if let interactiveBool = dict["interactive"] as? Bool {
       interactive = interactiveBool
     }
+    if let isDarkBool = dict["isDark"] as? Bool {
+      isDark = isDarkBool
+    }
     
     // Update the SwiftUI view
     let newGlassView = LiquidGlassContainerSwiftUI(
@@ -127,6 +132,7 @@ class LiquidGlassContainerPlatformView: NSObject, FlutterPlatformView {
     )
     
     hostingController.rootView = newGlassView
+    hostingController.overrideUserInterfaceStyle = isDark ? .dark : .light
   }
   
   func view() -> UIView {
@@ -147,7 +153,7 @@ struct LiquidGlassContainerSwiftUI: View {
       shapeForConfig()
         .fill(Color.clear)
         .contentShape(shapeForConfig())
-        .allowsHitTesting(interactive)
+        .allowsHitTesting(false)  // Always false - let Flutter handle gestures
         .glassEffect(glassEffectForConfig(), in: shapeForConfig())
         .frame(width: geometry.size.width, height: geometry.size.height)
     }

@@ -1,16 +1,16 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../channel/params.dart';
-import '../style/sf_symbol.dart';
 import '../style/button_style.dart';
 import '../style/image_placement.dart';
+import '../style/sf_symbol.dart';
 import '../utils/icon_renderer.dart';
-import '../utils/version_detector.dart';
 import '../utils/theme_helper.dart';
+import '../utils/version_detector.dart';
 
 /// Configuration for CNButton with default values.
 class CNButtonConfig {
@@ -41,29 +41,29 @@ class CNButtonConfig {
   final bool shrinkWrap;
 
   /// Optional ID for glass effect union.
-  /// 
+  ///
   /// When multiple buttons share the same `glassEffectUnionId`, they will
   /// be combined into a single unified Liquid Glass effect. This is useful
   /// for creating grouped button effects that appear as one cohesive shape.
-  /// 
+  ///
   /// Only applies on iOS 26+ and macOS 26+ when using glass styles.
   final String? glassEffectUnionId;
 
   /// Optional ID for glass effect morphing transitions.
-  /// 
+  ///
   /// When a button with a `glassEffectId` appears or disappears within a
   /// glass effect container, it will morph into/out of other buttons with
   /// the same ID or nearby buttons. This enables smooth transitions.
-  /// 
+  ///
   /// Only applies on iOS 26+ and macOS 26+ when using glass styles.
   final String? glassEffectId;
 
   /// Whether to make the glass effect interactive.
-  /// 
+  ///
   /// Interactive glass effects respond to touch and pointer interactions
   /// in real time, providing the same responsive reactions that glass
   /// provides to standard buttons.
-  /// 
+  ///
   /// Only applies on iOS 26+ and macOS 26+ when using glass styles.
   final bool glassEffectInteractive;
 
@@ -86,11 +86,11 @@ class CNButtonConfig {
 ///
 /// Embeds a native UIButton/NSButton for authentic visuals and behavior on
 /// iOS and macOS. Falls back to [CupertinoButton] on other platforms.
-/// 
+///
 /// All buttons are round by default. Use [config] to customize appearance.
 class CNButton extends StatefulWidget {
   /// Creates a text button variant of [CNButton].
-  /// 
+  ///
   /// Can optionally include an [icon] to create a button with both text and icon.
   const CNButton({
     super.key,
@@ -105,10 +105,10 @@ class CNButton extends StatefulWidget {
   }) : super();
 
   /// Creates a round, icon-only variant of [CNButton].
-  /// 
+  ///
   /// When padding, width, and minHeight are not provided in [config],
   /// the button will be automatically sized to be circular based on the icon size.
-  /// 
+  ///
   /// At least one of [icon], [customIcon], or [imageAsset] must be provided.
   const CNButton.icon({
     super.key,
@@ -118,12 +118,12 @@ class CNButton extends StatefulWidget {
     this.onPressed,
     this.enabled = true,
     this.tint,
-    this.config = const CNButtonConfig(
-      style: CNButtonStyle.glass,
-    ),
+    this.config = const CNButtonConfig(style: CNButtonStyle.glass),
   }) : label = null,
-       assert(icon != null || customIcon != null || imageAsset != null,
-           'At least one of icon, customIcon, or imageAsset must be provided'),
+       assert(
+         icon != null || customIcon != null || imageAsset != null,
+         'At least one of icon, customIcon, or imageAsset must be provided',
+       ),
        super();
 
   /// Button text (null in icon-only mode).
@@ -132,12 +132,15 @@ class CNButton extends StatefulWidget {
   /// Can be used together with [label] to create a button with both text and icon.
   /// Priority: [imageAsset] > [customIcon] > [icon]
   final CNSymbol? icon;
+
   /// Optional custom icon from CupertinoIcons, Icons, or any IconData.
   /// If provided, this takes precedence over [icon] but not [imageAsset].
   final IconData? customIcon;
+
   /// Optional image asset (SVG, PNG, etc.) for the button icon.
   /// If provided, this takes precedence over [icon] and [customIcon].
   final CNImageAsset? imageAsset;
+
   /// Callback when pressed.
   final VoidCallback? onPressed;
 
@@ -152,7 +155,7 @@ class CNButton extends StatefulWidget {
 
   /// Whether this instance is configured as the icon variant.
   bool get isIcon => icon != null || customIcon != null || imageAsset != null;
-  
+
   /// Whether the button is round (always true).
   bool get round => true;
 
@@ -207,9 +210,11 @@ class _CNButtonState extends State<CNButton> {
   @override
   Widget build(BuildContext context) {
     // Check if we should use native platform view
-    final isIOSOrMacOS = defaultTargetPlatform == TargetPlatform.iOS ||
+    final isIOSOrMacOS =
+        defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS;
-    final shouldUseNative = isIOSOrMacOS && PlatformVersion.shouldUseNativeGlass;
+    final shouldUseNative =
+        isIOSOrMacOS && PlatformVersion.shouldUseNativeGlass;
 
     // Fallback to Flutter implementation for non-iOS/macOS or iOS/macOS < 26
     if (!shouldUseNative) {
@@ -217,13 +222,13 @@ class _CNButtonState extends State<CNButton> {
       if (!isIOSOrMacOS) {
         return _buildMaterialFallback(context);
       }
-      
+
       // For iOS/macOS < 26, use Cupertino widgets
       return _buildCupertinoFallback(context);
     }
 
     // Priority: imageAsset > customIcon > icon
-    
+
     // Handle image asset (highest priority)
     if (widget.imageAsset != null) {
       return FutureBuilder<String>(
@@ -231,7 +236,10 @@ class _CNButtonState extends State<CNButton> {
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             final defaultHeight = widget.config.minHeight ?? 44.0;
-            return SizedBox(height: defaultHeight, width: widget.config.width ?? defaultHeight);
+            return SizedBox(
+              height: defaultHeight,
+              width: widget.config.width ?? defaultHeight,
+            );
           }
           // Create a new CNImageAsset with resolved path
           final resolvedImageAsset = CNImageAsset(
@@ -247,26 +255,36 @@ class _CNButtonState extends State<CNButton> {
         },
       );
     }
-    
+
     // Handle custom icon (medium priority)
     if (widget.customIcon != null) {
       return FutureBuilder<Uint8List?>(
-        future: iconDataToImageBytes(widget.customIcon!, size: widget.icon?.size ?? 20.0),
+        future: iconDataToImageBytes(
+          widget.customIcon!,
+          size: widget.icon?.size ?? 20.0,
+        ),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             final defaultHeight = widget.config.minHeight ?? 44.0;
-            return SizedBox(height: defaultHeight, width: widget.config.width ?? defaultHeight);
+            return SizedBox(
+              height: defaultHeight,
+              width: widget.config.width ?? defaultHeight,
+            );
           }
           return _buildNativeButton(context, customIconBytes: snapshot.data);
         },
       );
     }
-    
+
     // Handle SF Symbol (lowest priority)
     return _buildNativeButton(context, customIconBytes: null);
   }
 
-  Widget _buildNativeButton(BuildContext context, {Uint8List? customIconBytes, CNImageAsset? imageAsset}) {
+  Widget _buildNativeButton(
+    BuildContext context, {
+    Uint8List? customIconBytes,
+    CNImageAsset? imageAsset,
+  }) {
     const viewType = 'CupertinoNativeButton';
 
     // Determine which source to use and build parameters accordingly
@@ -286,7 +304,8 @@ class _CNButtonState extends State<CNButton> {
       assetPath = imageAsset.assetPath;
       imageData = imageAsset.imageData;
       // Auto-detect format if not provided
-      imageFormat = imageAsset.imageFormat ?? 
+      imageFormat =
+          imageAsset.imageFormat ??
           detectImageFormat(imageAsset.assetPath, imageAsset.imageData);
       iconSize = imageAsset.size;
       iconColor = imageAsset.color;
@@ -316,11 +335,17 @@ class _CNButtonState extends State<CNButton> {
     const double kMinimumTouchTarget = 44.0;
     final isIconButton = widget.isIcon && widget.label == null;
     EdgeInsets? effectivePadding = widget.config.padding;
-    if (isIconButton && effectivePadding == null && widget.config.width == null && widget.config.minHeight == null) {
+    if (isIconButton &&
+        effectivePadding == null &&
+        widget.config.width == null &&
+        widget.config.minHeight == null) {
       // Calculate padding to make button circular: iconSize * 0.5 on each side
       // Ensure minimum size of 44 points per Apple HIG
       final calculatedSize = iconSize + (iconSize * 0.5) * 2;
-      final finalSize = calculatedSize.clamp(kMinimumTouchTarget, double.infinity);
+      final finalSize = calculatedSize.clamp(
+        kMinimumTouchTarget,
+        double.infinity,
+      );
       // Adjust padding to maintain circular shape while respecting minimum size
       final calculatedPadding = (finalSize - iconSize) / 2;
       effectivePadding = EdgeInsets.all(calculatedPadding);
@@ -328,8 +353,7 @@ class _CNButtonState extends State<CNButton> {
 
     final creationParams = <String, dynamic>{
       if (widget.label != null) 'buttonTitle': widget.label,
-      if (customIconBytes != null)
-        'buttonCustomIconBytes': customIconBytes,
+      if (customIconBytes != null) 'buttonCustomIconBytes': customIconBytes,
       if (imageAsset != null) ...{
         if (assetPath != null) 'buttonAssetPath': assetPath,
         if (imageData != null) 'buttonImageData': imageData,
@@ -339,14 +363,12 @@ class _CNButtonState extends State<CNButton> {
       'buttonIconSize': iconSize,
       if (iconColor != null)
         'buttonIconColor': resolveColorToArgb(iconColor, context),
-      if (iconMode != null)
-        'buttonIconRenderingMode': iconMode.name,
+      if (iconMode != null) 'buttonIconRenderingMode': iconMode.name,
       if (paletteColors != null)
         'buttonIconPaletteColors': paletteColors
             .map((c) => resolveColorToArgb(c, context))
             .toList(),
-      if (iconGradient != null)
-        'buttonIconGradientEnabled': iconGradient,
+      if (iconGradient != null) 'buttonIconGradientEnabled': iconGradient,
       'round': true, // Always round
       'buttonStyle': widget.config.style.name,
       'enabled': (widget.enabled && widget.onPressed != null),
@@ -357,19 +379,22 @@ class _CNButtonState extends State<CNButton> {
         'imagePadding': widget.config.imagePadding,
       if (effectivePadding != null) ...{
         if (effectivePadding.top != 0.0) 'paddingTop': effectivePadding.top,
-        if (effectivePadding.bottom != 0.0) 'paddingBottom': effectivePadding.bottom,
+        if (effectivePadding.bottom != 0.0)
+          'paddingBottom': effectivePadding.bottom,
         if (effectivePadding.left != 0.0) 'paddingLeft': effectivePadding.left,
-        if (effectivePadding.right != 0.0) 'paddingRight': effectivePadding.right,
+        if (effectivePadding.right != 0.0)
+          'paddingRight': effectivePadding.right,
         // Support horizontal/vertical as convenience
-        if (effectivePadding.left == effectivePadding.right && effectivePadding.left != 0.0)
+        if (effectivePadding.left == effectivePadding.right &&
+            effectivePadding.left != 0.0)
           'paddingHorizontal': effectivePadding.left,
-        if (effectivePadding.top == effectivePadding.bottom && effectivePadding.top != 0.0)
+        if (effectivePadding.top == effectivePadding.bottom &&
+            effectivePadding.top != 0.0)
           'paddingVertical': effectivePadding.top,
       },
       if (widget.config.borderRadius != null)
         'borderRadius': widget.config.borderRadius,
-      if (widget.config.minHeight != null)
-        'minHeight': widget.config.minHeight,
+      if (widget.config.minHeight != null) 'minHeight': widget.config.minHeight,
       if (widget.config.glassEffectUnionId != null)
         'glassEffectUnionId': widget.config.glassEffectUnionId,
       if (widget.config.glassEffectId != null)
@@ -406,12 +431,15 @@ class _CNButtonState extends State<CNButton> {
         // For icon-only buttons, use fixed width/height
         // For buttons with label (with or without icon), use intrinsic width
         final isIconButton = widget.isIcon && widget.label == null;
-        
+
         // Calculate circular dimensions for icon buttons when padding/width/minHeight not provided
         // Apple HIG specifies minimum touch target of 44×44 points
         const double kMinimumTouchTarget = 44.0;
         double? calculatedSize;
-        if (isIconButton && widget.config.padding == null && widget.config.width == null && widget.config.minHeight == null) {
+        if (isIconButton &&
+            widget.config.padding == null &&
+            widget.config.width == null &&
+            widget.config.minHeight == null) {
           // Get icon size
           double iconSize = 20.0;
           if (imageAsset != null) {
@@ -424,9 +452,12 @@ class _CNButtonState extends State<CNButton> {
           // Calculate circular size: icon size + padding on all sides
           // Use a padding of iconSize * 0.5 on each side for a nice circular appearance
           // Ensure minimum size of 44 points per Apple HIG
-          calculatedSize = (iconSize + (iconSize * 0.5) * 2).clamp(kMinimumTouchTarget, double.infinity);
+          calculatedSize = (iconSize + (iconSize * 0.5) * 2).clamp(
+            kMinimumTouchTarget,
+            double.infinity,
+          );
         }
-        
+
         final defaultHeight = widget.config.minHeight ?? calculatedSize ?? 44.0;
         if (isIconButton) {
           width = widget.config.width ?? calculatedSize ?? defaultHeight;
@@ -434,9 +465,17 @@ class _CNButtonState extends State<CNButton> {
           width = _intrinsicWidth ?? 80.0;
         }
         // Use intrinsic height when image is top/bottom to prevent cropping
-        final needsDynamicHeight = widget.imageAsset != null || widget.customIcon != null || widget.icon != null;
-        final isVerticalPlacement = widget.config.imagePlacement == CNImagePlacement.top || widget.config.imagePlacement == CNImagePlacement.bottom;
-        final height = (needsDynamicHeight && isVerticalPlacement && _intrinsicHeight != null)
+        final needsDynamicHeight =
+            widget.imageAsset != null ||
+            widget.customIcon != null ||
+            widget.icon != null;
+        final isVerticalPlacement =
+            widget.config.imagePlacement == CNImagePlacement.top ||
+            widget.config.imagePlacement == CNImagePlacement.bottom;
+        final height =
+            (needsDynamicHeight &&
+                isVerticalPlacement &&
+                _intrinsicHeight != null)
             ? _intrinsicHeight!
             : defaultHeight;
         return Listener(
@@ -462,11 +501,7 @@ class _CNButtonState extends State<CNButton> {
             _downPosition = null;
           },
           child: ClipRect(
-            child: SizedBox(
-              height: height,
-              width: width,
-              child: platformView,
-            ),
+            child: SizedBox(height: height, width: width, child: platformView),
           ),
         );
       },
@@ -542,7 +577,9 @@ class _CNButtonState extends State<CNButton> {
       _lastTint = tint;
     }
     if (_lastStyle != widget.config.style) {
-      await ch.invokeMethod('setStyle', {'buttonStyle': widget.config.style.name});
+      await ch.invokeMethod('setStyle', {
+        'buttonStyle': widget.config.style.name,
+      });
       _lastStyle = widget.config.style;
     }
     // Enabled state
@@ -557,7 +594,9 @@ class _CNButtonState extends State<CNButton> {
 
     // Sync imagePlacement
     if (_lastImagePlacement != widget.config.imagePlacement) {
-      await ch.invokeMethod('setImagePlacement', {'placement': widget.config.imagePlacement.name});
+      await ch.invokeMethod('setImagePlacement', {
+        'placement': widget.config.imagePlacement.name,
+      });
       _lastImagePlacement = widget.config.imagePlacement;
       // Request intrinsic size when placement changes (affects layout)
       _requestIntrinsicSize();
@@ -566,7 +605,9 @@ class _CNButtonState extends State<CNButton> {
     // Sync imagePadding
     if (_lastImagePadding != widget.config.imagePadding) {
       if (widget.config.imagePadding != null) {
-        await ch.invokeMethod('setImagePadding', {'padding': widget.config.imagePadding});
+        await ch.invokeMethod('setImagePadding', {
+          'padding': widget.config.imagePadding,
+        });
       } else {
         await ch.invokeMethod('setImagePadding', null);
       }
@@ -584,71 +625,102 @@ class _CNButtonState extends State<CNButton> {
     }
 
     // Sync icon properties if icon is present (works for both icon-only and label+icon buttons)
-    if (widget.icon != null || widget.imageAsset != null || widget.customIcon != null) {
+    if (widget.icon != null ||
+        widget.imageAsset != null ||
+        widget.customIcon != null) {
       final iconName = preIconName;
       final iconSize = preIconSize;
       final iconColor = preIconColor;
       final updates = <String, dynamic>{};
-      
+
       // Check if imageAsset path or data changed
-      final imageAssetPathChanged = _lastImageAssetPath != widget.imageAsset?.assetPath;
-      final imageAssetDataChanged = _lastImageAssetData != widget.imageAsset?.imageData;
+      final imageAssetPathChanged =
+          _lastImageAssetPath != widget.imageAsset?.assetPath;
+      final imageAssetDataChanged =
+          _lastImageAssetData != widget.imageAsset?.imageData;
       final customIconChanged = _lastCustomIcon != widget.customIcon;
-      
+
       // Check if we switched from one icon type to another
       final hadImageAsset = _lastImageAssetPath != null;
       final hasImageAsset = widget.imageAsset != null;
       final hadCustomIcon = _lastCustomIcon != null;
       final hasCustomIcon = widget.customIcon != null;
-      final iconTypeChanged = (hadImageAsset != hasImageAsset) || (hadCustomIcon != hasCustomIcon);
-      
+      final iconTypeChanged =
+          (hadImageAsset != hasImageAsset) || (hadCustomIcon != hasCustomIcon);
+
       // Handle imageAsset (takes precedence over SF Symbol)
       if (widget.imageAsset != null) {
         // Update if path/data changed OR if we switched from another icon type
         if (imageAssetPathChanged || imageAssetDataChanged || iconTypeChanged) {
-        // Resolve asset path based on device pixel ratio
-        final resolvedAssetPath = await resolveAssetPathForPixelRatio(widget.imageAsset!.assetPath);
-        updates['buttonAssetPath'] = resolvedAssetPath;
-        updates['buttonImageData'] = widget.imageAsset!.imageData;
-        // Auto-detect format if not provided (use resolved path)
-        updates['buttonImageFormat'] = widget.imageAsset!.imageFormat ?? 
-            detectImageFormat(resolvedAssetPath, widget.imageAsset!.imageData);
-        updates['buttonIconSize'] = widget.imageAsset!.size;
-        if (widget.imageAsset!.color != null) {
-          updates['buttonIconColor'] = resolveColorToArgb(widget.imageAsset!.color, context);
-        }
-        if (widget.imageAsset!.mode != null) {
-          updates['buttonIconRenderingMode'] = widget.imageAsset!.mode!.name;
-        }
-        if (widget.imageAsset!.gradient != null) {
-          updates['buttonIconGradientEnabled'] = widget.imageAsset!.gradient;
-        }
+          // Resolve asset path based on device pixel ratio
+          final resolvedAssetPath = await resolveAssetPathForPixelRatio(
+            widget.imageAsset!.assetPath,
+          );
+          updates['buttonAssetPath'] = resolvedAssetPath;
+          updates['buttonImageData'] = widget.imageAsset!.imageData;
+          // Auto-detect format if not provided (use resolved path)
+          updates['buttonImageFormat'] =
+              widget.imageAsset!.imageFormat ??
+              detectImageFormat(
+                resolvedAssetPath,
+                widget.imageAsset!.imageData,
+              );
+          updates['buttonIconSize'] = widget.imageAsset!.size;
+          if (widget.imageAsset!.color != null) {
+            if (mounted) {
+              updates['buttonIconColor'] = resolveColorToArgb(
+                widget.imageAsset!.color,
+                context,
+              );
+            }
+          }
+          if (widget.imageAsset!.mode != null) {
+            updates['buttonIconRenderingMode'] = widget.imageAsset!.mode!.name;
+          }
+          if (widget.imageAsset!.gradient != null) {
+            updates['buttonIconGradientEnabled'] = widget.imageAsset!.gradient;
+          }
           // Update tracking variables
           _lastImageAssetPath = widget.imageAsset!.assetPath;
           _lastImageAssetData = widget.imageAsset!.imageData;
           _lastCustomIcon = null; // Clear custom icon tracking
-      } else {
+        } else {
           // Even if path didn't change, check if other imageAsset properties changed
           final sizeChanged = _lastIconSize != widget.imageAsset!.size;
-          final colorChanged = _lastIconColor != resolveColorToArgb(widget.imageAsset!.color, context);
-          
+          final colorChanged =
+              _lastIconColor !=
+              resolveColorToArgb(widget.imageAsset!.color, context);
+
           if (sizeChanged || colorChanged) {
             updates['buttonIconSize'] = widget.imageAsset!.size;
             if (widget.imageAsset!.color != null) {
-              updates['buttonIconColor'] = resolveColorToArgb(widget.imageAsset!.color, context);
+              if (mounted) {
+                updates['buttonIconColor'] = resolveColorToArgb(
+                  widget.imageAsset!.color,
+                  context,
+                );
+              }
             }
             if (widget.imageAsset!.mode != null) {
-              updates['buttonIconRenderingMode'] = widget.imageAsset!.mode!.name;
+              updates['buttonIconRenderingMode'] =
+                  widget.imageAsset!.mode!.name;
             }
             if (widget.imageAsset!.gradient != null) {
-              updates['buttonIconGradientEnabled'] = widget.imageAsset!.gradient;
+              updates['buttonIconGradientEnabled'] =
+                  widget.imageAsset!.gradient;
             }
             // Always include asset path when updating other properties
-            final resolvedAssetPath = await resolveAssetPathForPixelRatio(widget.imageAsset!.assetPath);
+            final resolvedAssetPath = await resolveAssetPathForPixelRatio(
+              widget.imageAsset!.assetPath,
+            );
             updates['buttonAssetPath'] = resolvedAssetPath;
             updates['buttonImageData'] = widget.imageAsset!.imageData;
-            updates['buttonImageFormat'] = widget.imageAsset!.imageFormat ?? 
-                detectImageFormat(resolvedAssetPath, widget.imageAsset!.imageData);
+            updates['buttonImageFormat'] =
+                widget.imageAsset!.imageFormat ??
+                detectImageFormat(
+                  resolvedAssetPath,
+                  widget.imageAsset!.imageData,
+                );
           }
         }
       } else if (widget.customIcon != null) {
@@ -663,7 +735,12 @@ class _CNButtonState extends State<CNButton> {
             updates['buttonCustomIconBytes'] = customIconBytes;
             updates['buttonIconSize'] = widget.icon?.size ?? 20.0;
             if (widget.icon?.color != null) {
-              updates['buttonIconColor'] = resolveColorToArgb(widget.icon!.color, context);
+              if (mounted) {
+                updates['buttonIconColor'] = resolveColorToArgb(
+                  widget.icon!.color,
+                  context,
+                );
+              }
             }
             if (widget.icon?.mode != null) {
               updates['buttonIconRenderingMode'] = widget.icon!.mode!.name;
@@ -701,7 +778,7 @@ class _CNButtonState extends State<CNButton> {
 
         // If any property changed OR icon type changed, include the icon source
         if ((hasChanges || iconTypeChanged) && iconName != null) {
-            updates['buttonIconName'] = iconName;
+          updates['buttonIconName'] = iconName;
           if (iconSize != null) {
             updates['buttonIconSize'] = iconSize;
           }
@@ -727,7 +804,7 @@ class _CNButtonState extends State<CNButton> {
           }
         }
       }
-      
+
       if (updates.isNotEmpty) {
         await ch.invokeMethod('setButtonIcon', updates);
         // Request intrinsic size when icon changes (affects layout)
@@ -772,12 +849,17 @@ class _CNButtonState extends State<CNButton> {
     } else if (widget.customIcon != null) {
       iconWidget = Icon(widget.customIcon, size: widget.icon?.size ?? 20.0);
     } else if (widget.icon != null) {
-      iconWidget = Icon(CupertinoIcons.ellipsis, size: widget.icon?.size ?? 20.0);
+      iconWidget = Icon(
+        CupertinoIcons.ellipsis,
+        size: widget.icon?.size ?? 20.0,
+      );
     }
 
     Widget child;
     if (widget.isIcon) {
-      child = iconWidget ?? Icon(CupertinoIcons.ellipsis, size: widget.icon?.size ?? 20.0);
+      child =
+          iconWidget ??
+          Icon(CupertinoIcons.ellipsis, size: widget.icon?.size ?? 20.0);
     } else {
       if (iconWidget != null && widget.label != null) {
         // Handle image placement
@@ -787,7 +869,8 @@ class _CNButtonState extends State<CNButton> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 iconWidget,
-                if (widget.config.imagePadding != null) SizedBox(width: widget.config.imagePadding!),
+                if (widget.config.imagePadding != null)
+                  SizedBox(width: widget.config.imagePadding!),
                 Text(widget.label ?? ''),
               ],
             );
@@ -797,7 +880,8 @@ class _CNButtonState extends State<CNButton> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(widget.label ?? ''),
-                if (widget.config.imagePadding != null) SizedBox(width: widget.config.imagePadding!),
+                if (widget.config.imagePadding != null)
+                  SizedBox(width: widget.config.imagePadding!),
                 iconWidget,
               ],
             );
@@ -807,7 +891,8 @@ class _CNButtonState extends State<CNButton> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 iconWidget,
-                if (widget.config.imagePadding != null) SizedBox(height: widget.config.imagePadding!),
+                if (widget.config.imagePadding != null)
+                  SizedBox(height: widget.config.imagePadding!),
                 Text(widget.label ?? ''),
               ],
             );
@@ -817,7 +902,8 @@ class _CNButtonState extends State<CNButton> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(widget.label ?? ''),
-                if (widget.config.imagePadding != null) SizedBox(height: widget.config.imagePadding!),
+                if (widget.config.imagePadding != null)
+                  SizedBox(height: widget.config.imagePadding!),
                 iconWidget,
               ],
             );
@@ -833,7 +919,11 @@ class _CNButtonState extends State<CNButton> {
     const double kMinimumTouchTarget = 44.0;
     double? calculatedSize;
     EdgeInsets? effectivePadding = widget.config.padding;
-    if (widget.isIcon && widget.label == null && effectivePadding == null && widget.config.width == null && widget.config.minHeight == null) {
+    if (widget.isIcon &&
+        widget.label == null &&
+        effectivePadding == null &&
+        widget.config.width == null &&
+        widget.config.minHeight == null) {
       // Get icon size
       double iconSize = 20.0;
       if (widget.imageAsset != null) {
@@ -846,12 +936,15 @@ class _CNButtonState extends State<CNButton> {
       // Calculate circular size: icon size + padding on all sides
       // Ensure minimum size of 44 points per Apple HIG
       final calculatedSizeValue = iconSize + (iconSize * 0.5) * 2;
-      calculatedSize = calculatedSizeValue.clamp(kMinimumTouchTarget, double.infinity);
+      calculatedSize = calculatedSizeValue.clamp(
+        kMinimumTouchTarget,
+        double.infinity,
+      );
       // Adjust padding to maintain circular shape while respecting minimum size
       final calculatedPadding = (calculatedSize - iconSize) / 2;
       effectivePadding = EdgeInsets.all(calculatedPadding);
     }
-    
+
     final defaultHeight = widget.config.minHeight ?? calculatedSize ?? 44.0;
     return SizedBox(
       height: defaultHeight,
@@ -861,10 +954,8 @@ class _CNButtonState extends State<CNButton> {
       child: CupertinoButton(
         padding: widget.isIcon
             ? (effectivePadding ?? const EdgeInsets.all(4))
-            : (widget.config.padding ?? EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 4,
-              )),
+            : (widget.config.padding ??
+                  EdgeInsets.symmetric(horizontal: 12, vertical: 4)),
         color: _getCupertinoButtonColor(context),
         onPressed: (widget.enabled && widget.onPressed != null)
             ? widget.onPressed
@@ -898,7 +989,8 @@ class _CNButtonState extends State<CNButton> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 iconWidget,
-                if (widget.config.imagePadding != null) SizedBox(width: widget.config.imagePadding!),
+                if (widget.config.imagePadding != null)
+                  SizedBox(width: widget.config.imagePadding!),
                 Text(widget.label ?? ''),
               ],
             );
@@ -908,7 +1000,8 @@ class _CNButtonState extends State<CNButton> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(widget.label ?? ''),
-                if (widget.config.imagePadding != null) SizedBox(width: widget.config.imagePadding!),
+                if (widget.config.imagePadding != null)
+                  SizedBox(width: widget.config.imagePadding!),
                 iconWidget,
               ],
             );
@@ -918,7 +1011,8 @@ class _CNButtonState extends State<CNButton> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 iconWidget,
-                if (widget.config.imagePadding != null) SizedBox(height: widget.config.imagePadding!),
+                if (widget.config.imagePadding != null)
+                  SizedBox(height: widget.config.imagePadding!),
                 Text(widget.label ?? ''),
               ],
             );
@@ -928,7 +1022,8 @@ class _CNButtonState extends State<CNButton> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(widget.label ?? ''),
-                if (widget.config.imagePadding != null) SizedBox(height: widget.config.imagePadding!),
+                if (widget.config.imagePadding != null)
+                  SizedBox(height: widget.config.imagePadding!),
                 iconWidget,
               ],
             );
@@ -946,7 +1041,11 @@ class _CNButtonState extends State<CNButton> {
     const double kMinimumTouchTarget = 44.0;
     double? calculatedSize;
     EdgeInsets? effectivePadding = widget.config.padding;
-    if (widget.isIcon && widget.label == null && effectivePadding == null && widget.config.width == null && widget.config.minHeight == null) {
+    if (widget.isIcon &&
+        widget.label == null &&
+        effectivePadding == null &&
+        widget.config.width == null &&
+        widget.config.minHeight == null) {
       // Get icon size
       double iconSize = 20.0;
       if (widget.imageAsset != null) {
@@ -959,12 +1058,15 @@ class _CNButtonState extends State<CNButton> {
       // Calculate circular size: icon size + padding on all sides
       // Ensure minimum size of 44 points per Apple HIG
       final calculatedSizeValue = iconSize + (iconSize * 0.5) * 2;
-      calculatedSize = calculatedSizeValue.clamp(kMinimumTouchTarget, double.infinity);
+      calculatedSize = calculatedSizeValue.clamp(
+        kMinimumTouchTarget,
+        double.infinity,
+      );
       // Adjust padding to maintain circular shape while respecting minimum size
       final calculatedPadding = (calculatedSize - iconSize) / 2;
       effectivePadding = EdgeInsets.all(calculatedPadding);
     }
-    
+
     final defaultHeight = widget.config.minHeight ?? calculatedSize ?? 44.0;
     return SizedBox(
       height: defaultHeight,
@@ -974,15 +1076,15 @@ class _CNButtonState extends State<CNButton> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: (widget.enabled && widget.onPressed != null) ? widget.onPressed : null,
+          onTap: (widget.enabled && widget.onPressed != null)
+              ? widget.onPressed
+              : null,
           borderRadius: BorderRadius.circular(defaultHeight / 2),
           child: Container(
             padding: widget.isIcon
                 ? (effectivePadding ?? const EdgeInsets.all(4))
-                : (widget.config.padding ?? EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  )),
+                : (widget.config.padding ??
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 4)),
             decoration: BoxDecoration(
               color: _getMaterialButtonColor(context),
               borderRadius: BorderRadius.circular(defaultHeight / 2),

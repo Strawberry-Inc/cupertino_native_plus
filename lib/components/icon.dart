@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import '../channel/params.dart';
 import '../style/sf_symbol.dart';
 import '../utils/icon_renderer.dart';
-import '../utils/version_detector.dart';
 import '../utils/theme_helper.dart';
+import '../utils/version_detector.dart';
 
 /// A platform-rendered SF Symbol icon, custom image asset, or IconData.
 ///
@@ -24,8 +24,10 @@ class CNIcon extends StatefulWidget {
     this.mode,
     this.gradient,
     this.height,
-  }) : assert(symbol != null || imageAsset != null || customIcon != null,
-         'At least one of symbol, imageAsset, or customIcon must be provided');
+  }) : assert(
+         symbol != null || imageAsset != null || customIcon != null,
+         'At least one of symbol, imageAsset, or customIcon must be provided',
+       );
 
   /// The SF Symbol to render.
   /// Priority: [imageAsset] > [customIcon] > [symbol]
@@ -91,9 +93,11 @@ class _CNIconState extends State<CNIcon> {
   @override
   Widget build(BuildContext context) {
     // Check if we should use native platform view
-    final isIOSOrMacOS = defaultTargetPlatform == TargetPlatform.iOS ||
+    final isIOSOrMacOS =
+        defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS;
-    final shouldUseNative = isIOSOrMacOS && PlatformVersion.shouldUseNativeGlass;
+    final shouldUseNative =
+        isIOSOrMacOS && PlatformVersion.shouldUseNativeGlass;
 
     // Fallback to Flutter widgets for non-iOS/macOS or iOS/macOS < 26
     if (!shouldUseNative) {
@@ -101,7 +105,7 @@ class _CNIconState extends State<CNIcon> {
     }
 
     // Priority: imageAsset > customIcon > symbol
-    
+
     // Handle image asset (highest priority)
     if (widget.imageAsset != null) {
       return FutureBuilder<String>(
@@ -125,7 +129,7 @@ class _CNIconState extends State<CNIcon> {
         },
       );
     }
-    
+
     // Handle custom icon (medium priority)
     if (widget.customIcon != null) {
       final iconSize = widget.size ?? widget.symbol?.size ?? 24.0;
@@ -144,7 +148,11 @@ class _CNIconState extends State<CNIcon> {
     return _buildNativeIcon(context, customIconBytes: null);
   }
 
-  Widget _buildNativeIcon(BuildContext context, {Uint8List? customIconBytes, CNImageAsset? imageAsset}) {
+  Widget _buildNativeIcon(
+    BuildContext context, {
+    Uint8List? customIconBytes,
+    CNImageAsset? imageAsset,
+  }) {
     const viewType = 'CupertinoNativeIcon';
 
     // Determine which source to use and build parameters accordingly
@@ -196,12 +204,9 @@ class _CNIconState extends State<CNIcon> {
       'isDark': _isDark,
       'style': <String, dynamic>{
         'iconSize': size,
-        if (color != null)
-          'iconColor': resolveColorToArgb(color, context),
-        if (mode != null)
-          'iconRenderingMode': mode.name,
-        if (gradient != null)
-          'iconGradientEnabled': gradient == true,
+        if (color != null) 'iconColor': resolveColorToArgb(color, context),
+        if (mode != null) 'iconRenderingMode': mode.name,
+        if (gradient != null) 'iconGradientEnabled': gradient == true,
         if (paletteColors != null)
           'iconPaletteColors': paletteColors
               .map((c) => resolveColorToArgb(c, context))
@@ -224,8 +229,8 @@ class _CNIconState extends State<CNIcon> {
           );
 
     // Ensure the platform view always has finite constraints
-    final fallbackSize = widget.size ?? 
-        (imageAsset?.size ?? widget.symbol?.size ?? 24.0);
+    final fallbackSize =
+        widget.size ?? (imageAsset?.size ?? widget.symbol?.size ?? 24.0);
     final h = widget.height ?? fallbackSize;
     final w = fallbackSize;
     return ClipRect(
@@ -247,7 +252,7 @@ class _CNIconState extends State<CNIcon> {
 
   void _cacheCurrentProps() {
     _lastIsDark = _isDark;
-    
+
     // Determine current source and cache accordingly
     if (widget.imageAsset != null) {
       _lastName = widget.imageAsset!.assetPath;
@@ -302,10 +307,7 @@ class _CNIconState extends State<CNIcon> {
     } else if (widget.symbol != null) {
       name = widget.symbol!.name;
       size = widget.size ?? widget.symbol!.size;
-      color = resolveColorToArgb(
-        widget.color ?? widget.symbol!.color,
-        context,
-      );
+      color = resolveColorToArgb(widget.color ?? widget.symbol!.color, context);
       mode = (widget.mode ?? widget.symbol!.mode)?.name;
       gradient = widget.gradient ?? widget.symbol!.gradient;
     } else {
@@ -318,7 +320,7 @@ class _CNIconState extends State<CNIcon> {
 
     if (_lastName != name) {
       final symbolArgs = <String, dynamic>{'name': name};
-      
+
       // Add imageAsset properties if using imageAsset
       if (widget.imageAsset != null) {
         symbolArgs['assetPath'] = widget.imageAsset!.assetPath;
@@ -327,7 +329,7 @@ class _CNIconState extends State<CNIcon> {
         symbolArgs['imageFormat'] = widget.imageAsset!.imageFormat ?? 
             detectImageFormat(widget.imageAsset!.assetPath, widget.imageAsset!.imageData);
       }
-      
+
       await channel.invokeMethod('setSymbol', symbolArgs);
       _lastName = name;
     }
@@ -396,7 +398,7 @@ class _CNIconState extends State<CNIcon> {
   Widget _buildFlutterIcon(BuildContext context) {
     // For fallback, use Flutter Icon widget
     Widget? iconWidget;
-    
+
     if (widget.imageAsset != null) {
       // For image assets in fallback, use a placeholder
       iconWidget = Icon(
@@ -425,7 +427,7 @@ class _CNIconState extends State<CNIcon> {
         color: widget.color,
       );
     }
-    
+
     final h = widget.height ?? widget.size ?? 24.0;
     final w = widget.size ?? 24.0;
     return SizedBox(width: w, height: h, child: iconWidget);
