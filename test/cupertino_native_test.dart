@@ -7,7 +7,7 @@ class MockCupertinoNativePlatform
     implements CupertinoNativePlatform {
   @override
   Future<String?> getPlatformVersion() => Future.value('42');
-  
+
   @override
   Future<int?> getMajorOSVersion() => Future.value(26);
 }

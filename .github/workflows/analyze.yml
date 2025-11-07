@@ -1,0 +1,36 @@
+name: Analyze Code
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**.dart'
+      - 'pubspec.yaml'
+      - 'analysis_options.yaml'
+      - '.github/workflows/analyze.yml'
+
+jobs:
+  analyze:
+    name: Analyze Dart Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --set-exit-if-changed .
+
+      - name: Analyze code
+        run: flutter analyze
+

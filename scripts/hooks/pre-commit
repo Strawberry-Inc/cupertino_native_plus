@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Pre-commit hook to format Dart code before committing
+# This hook runs `dart format` on the entire project and stages the formatted files
+
+echo "Running dart format before commit..."
+
+# Run dart format on the entire project
+dart format . > /dev/null 2>&1
+
+# Check if any files were modified by dart format
+FORMATTED_FILES=$(git diff --name-only 2>/dev/null)
+
+if [ -n "$FORMATTED_FILES" ]; then
+    echo "✓ Formatted Dart files:"
+    echo "$FORMATTED_FILES"
+    echo ""
+    echo "Staging formatted files..."
+    # Stage all formatted files
+    echo "$FORMATTED_FILES" | xargs git add
+    echo "✓ Formatted files have been staged."
+else
+    echo "✓ All Dart files are already properly formatted."
+fi
+
+exit 0
+

@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Pre-push hook to format Dart code before pushing
+# This hook runs `dart format` on the entire project before allowing a push
+
+echo "Running dart format before push..."
+
+# Run dart format on the entire project
+dart format . > /dev/null 2>&1
+
+# Check if any files were modified by dart format
+if [ -n "$(git diff --name-only)" ]; then
+    echo "⚠️  Warning: dart format modified some files."
+    echo "Modified files:"
+    git diff --name-only
+    echo ""
+    echo "Please review the changes and commit them before pushing."
+    echo "You can run: git add . && git commit -m 'Format code with dart format'"
+    exit 1
+fi
+
+echo "✓ Code is properly formatted."
+exit 0
+
