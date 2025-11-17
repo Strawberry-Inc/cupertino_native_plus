@@ -107,7 +107,21 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
     if #available(iOS 13.0, *) { container.overrideUserInterfaceStyle = isDark ? .dark : .light }
 
     let appearance: UITabBarAppearance? = {
-    if #available(iOS 13.0, *) { let ap = UITabBarAppearance(); ap.configureWithDefaultBackground(); return ap }
+    if #available(iOS 13.0, *) {
+      let ap = UITabBarAppearance()
+      ap.configureWithDefaultBackground()
+      // Configure smaller badge text
+      let badgeTextAttributes: [NSAttributedString.Key: Any] = [
+        .font: UIFont.systemFont(ofSize: 6, weight: .medium)
+      ]
+      ap.stackedLayoutAppearance.normal.badgeTextAttributes = badgeTextAttributes
+      ap.stackedLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
+      ap.inlineLayoutAppearance.normal.badgeTextAttributes = badgeTextAttributes
+      ap.inlineLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
+      ap.compactInlineLayoutAppearance.normal.badgeTextAttributes = badgeTextAttributes
+      ap.compactInlineLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
+      return ap
+    }
     return nil
   }()
     func buildItems(_ range: Range<Int>) -> [UITabBarItem] {
@@ -438,7 +452,21 @@ channel.setMethodCallHandler { [weak self] call, result in
           let imageAssetFormats = self.currentImageAssetFormats
           let activeImageAssetFormats = self.currentActiveImageAssetFormats
           let appearance: UITabBarAppearance? = {
-            if #available(iOS 13.0, *) { let ap = UITabBarAppearance(); ap.configureWithDefaultBackground(); return ap }
+            if #available(iOS 13.0, *) {
+              let ap = UITabBarAppearance()
+              ap.configureWithDefaultBackground()
+              // Configure smaller badge text
+              let badgeTextAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 10, weight: .medium)
+              ]
+              ap.stackedLayoutAppearance.normal.badgeTextAttributes = badgeTextAttributes
+              ap.stackedLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
+              ap.inlineLayoutAppearance.normal.badgeTextAttributes = badgeTextAttributes
+              ap.inlineLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
+              ap.compactInlineLayoutAppearance.normal.badgeTextAttributes = badgeTextAttributes
+              ap.compactInlineLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
+              return ap
+            }
             return nil
           }()
           func buildItems(_ range: Range<Int>) -> [UITabBarItem] {

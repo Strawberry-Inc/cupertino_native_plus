@@ -72,7 +72,7 @@ class _TabBarDemoPageState extends State<TabBarDemoPage>
                         activeImageAsset: CNImageAsset(
                           'assets/icons/chat-filled.svg',
                         ),
-                        badge: '8',
+                        badge: '',
                       ),
                       CNTabBarItem(
                         label: 'Profile',
@@ -104,7 +104,7 @@ class _TabBarDemoPageState extends State<TabBarDemoPage>
                         activeImageAsset: CNImageAsset(
                           'assets/icons/search-filled.svg',
                         ),
-                        badge: '12',
+                        badge: ' ',
                       ),
                       CNTabBarItem(
                         label: 'Profile',
