@@ -85,6 +85,7 @@ class CNTabBar extends StatefulWidget {
     this.shrinkCentered = true,
     this.splitSpacing =
         12.0, // Apple's recommended spacing for visual separation
+    this.boldLabels = false,
   }) : assert(items.length >= 2, 'Tab bar must have at least 2 items'),
        assert(
          items.length <= 5,
@@ -136,6 +137,10 @@ class CNTabBar extends StatefulWidget {
   /// Defaults to 12pt following Apple's HIG recommendations for visual separation.
   final double splitSpacing; // gap between left/right halves when split
 
+  /// Whether to display all tab labels in bold font.
+  /// Defaults to false (regular weight).
+  final bool boldLabels;
+
   @override
   State<CNTabBar> createState() => _CNTabBarState();
 }
@@ -152,6 +157,7 @@ class _CNTabBarState extends State<CNTabBar> {
   List<String>? _lastSymbols;
   List<String>? _lastActiveSymbols;
   List<String>? _lastBadges;
+  bool? _lastBoldLabels;
   bool? _lastSplit;
   int? _lastRightCount;
   double? _lastSplitSpacing;
@@ -356,6 +362,7 @@ class _CNTabBarState extends State<CNTabBar> {
       'split': widget.split,
       'rightCount': widget.rightCount,
       'splitSpacing': widget.splitSpacing,
+      'boldLabels': widget.boldLabels,
       'style': encodeStyle(context, tint: _effectiveTint)
         ..addAll({
           if (widget.backgroundColor != null)
@@ -406,6 +413,7 @@ class _CNTabBarState extends State<CNTabBar> {
     _lastSplit = widget.split;
     _lastRightCount = widget.rightCount;
     _lastSplitSpacing = widget.splitSpacing;
+    _lastBoldLabels = widget.boldLabels;
 
     // Force refresh for label rendering on iOS < 16
     // Wait for next frame to ensure view is fully initialized
@@ -469,7 +477,8 @@ class _CNTabBarState extends State<CNTabBar> {
     if (_lastLabels?.join('|') != labels.join('|') ||
         _lastSymbols?.join('|') != symbols.join('|') ||
         _lastActiveSymbols?.join('|') != activeSymbols.join('|') ||
-        _lastBadges?.join('|') != badges.join('|')) {
+        _lastBadges?.join('|') != badges.join('|') ||
+        _lastBoldLabels != widget.boldLabels) {
       // Re-render custom icons if items changed
       final iconBytes = await _renderCustomIcons();
       final customIconBytes = iconBytes[0];
@@ -527,11 +536,13 @@ class _CNTabBarState extends State<CNTabBar> {
         'activeImageAssetFormats': activeImageAssetFormats,
         'iconScale': iconScale,
         'selectedIndex': widget.currentIndex,
+        'boldLabels': widget.boldLabels,
       });
       _lastLabels = labels;
       _lastSymbols = symbols;
       _lastActiveSymbols = activeSymbols;
       _lastBadges = badges;
+      _lastBoldLabels = widget.boldLabels;
       // Re-measure width in case content changed
       _requestIntrinsicSize();
     }

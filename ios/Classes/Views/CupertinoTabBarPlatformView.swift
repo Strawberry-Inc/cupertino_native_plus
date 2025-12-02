@@ -16,6 +16,7 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
   private var currentSymbols: [String] = []
   private var currentActiveSymbols: [String] = []
   private var currentBadges: [String] = []
+  private var boldLabels: Bool = false
   private var currentCustomIconBytes: [Data?] = []
   private var currentActiveCustomIconBytes: [Data?] = []
   private var currentImageAssetPaths: [String] = []
@@ -37,6 +38,7 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
     var symbols: [String] = []
     var activeSymbols: [String] = []
     var badges: [String] = []
+    var boldLabels: Bool = false
     var customIconBytes: [Data?] = []
     var activeCustomIconBytes: [Data?] = []
     var imageAssetPaths: [String] = []
@@ -62,6 +64,9 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
       symbols = (dict["sfSymbols"] as? [String]) ?? []
       activeSymbols = (dict["activeSfSymbols"] as? [String]) ?? []
       badges = (dict["badges"] as? [String]) ?? []
+      if let bold = dict["boldLabels"] as? NSNumber {
+        boldLabels = bold.boolValue
+      }
       if let bytesArray = dict["customIconBytes"] as? [FlutterStandardTypedData?] {
         customIconBytes = bytesArray.map { $0?.data }
       }
@@ -120,6 +125,19 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
       ap.inlineLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
       ap.compactInlineLayoutAppearance.normal.badgeTextAttributes = badgeTextAttributes
       ap.compactInlineLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
+      
+      // Set title attributes based on boldLabels
+      let fontWeight: UIFont.Weight = boldLabels ? .bold : .regular
+      let titleAttributes: [NSAttributedString.Key: Any] = [
+        .font: UIFont.systemFont(ofSize: 10, weight: fontWeight)
+      ]
+      ap.stackedLayoutAppearance.normal.titleTextAttributes = titleAttributes
+      ap.stackedLayoutAppearance.selected.titleTextAttributes = titleAttributes
+      ap.inlineLayoutAppearance.normal.titleTextAttributes = titleAttributes
+      ap.inlineLayoutAppearance.selected.titleTextAttributes = titleAttributes
+      ap.compactInlineLayoutAppearance.normal.titleTextAttributes = titleAttributes
+      ap.compactInlineLayoutAppearance.selected.titleTextAttributes = titleAttributes
+      
       return ap
     }
     return nil
@@ -300,6 +318,7 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
     self.currentSymbols = symbols
     self.currentActiveSymbols = activeSymbols
     self.currentBadges = badges
+    self.boldLabels = boldLabels
     self.currentCustomIconBytes = customIconBytes
     self.currentActiveCustomIconBytes = activeCustomIconBytes
     self.currentImageAssetPaths = imageAssetPaths
@@ -327,6 +346,10 @@ channel.setMethodCallHandler { [weak self] call, result in
           let symbols = (args["sfSymbols"] as? [String]) ?? []
           let activeSymbols = (args["activeSfSymbols"] as? [String]) ?? []
           let badges = (args["badges"] as? [String]) ?? []
+          var boldLabels: Bool = false
+          if let bold = args["boldLabels"] as? NSNumber {
+            boldLabels = bold.boolValue
+          }
           var customIconBytes: [Data?] = []
           var activeCustomIconBytes: [Data?] = []
           var imageAssetPaths: [String] = []
@@ -359,6 +382,7 @@ channel.setMethodCallHandler { [weak self] call, result in
           self.currentSymbols = symbols
           self.currentActiveSymbols = activeSymbols
           self.currentBadges = badges
+          self.boldLabels = boldLabels
           self.currentCustomIconBytes = customIconBytes
           self.currentActiveCustomIconBytes = activeCustomIconBytes
           self.currentImageAssetPaths = imageAssetPaths
@@ -443,6 +467,7 @@ channel.setMethodCallHandler { [weak self] call, result in
           let symbols = self.currentSymbols
           let activeSymbols = self.currentActiveSymbols
           let badges = self.currentBadges
+          let boldLabels = self.boldLabels
           let customIconBytes = self.currentCustomIconBytes
           let activeCustomIconBytes = self.currentActiveCustomIconBytes
           let imageAssetPaths = self.currentImageAssetPaths
@@ -465,6 +490,19 @@ channel.setMethodCallHandler { [weak self] call, result in
               ap.inlineLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
               ap.compactInlineLayoutAppearance.normal.badgeTextAttributes = badgeTextAttributes
               ap.compactInlineLayoutAppearance.selected.badgeTextAttributes = badgeTextAttributes
+              
+              // Set title attributes based on boldLabels
+              let fontWeight: UIFont.Weight = boldLabels ? .bold : .regular
+              let titleAttributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 10, weight: fontWeight)
+              ]
+              ap.stackedLayoutAppearance.normal.titleTextAttributes = titleAttributes
+              ap.stackedLayoutAppearance.selected.titleTextAttributes = titleAttributes
+              ap.inlineLayoutAppearance.normal.titleTextAttributes = titleAttributes
+              ap.inlineLayoutAppearance.selected.titleTextAttributes = titleAttributes
+              ap.compactInlineLayoutAppearance.normal.titleTextAttributes = titleAttributes
+              ap.compactInlineLayoutAppearance.selected.titleTextAttributes = titleAttributes
+              
               return ap
             }
             return nil

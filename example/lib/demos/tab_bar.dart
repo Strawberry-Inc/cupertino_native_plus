@@ -126,6 +126,7 @@ class _TabBarDemoPageState extends State<TabBarDemoPage>
               splitSpacing: 8,
               shrinkCentered: true,
               tint: Colors.red,
+              boldLabels: true,
               onTap: (i) {
                 setState(() => _index = i);
                 _controller.animateTo(i);
