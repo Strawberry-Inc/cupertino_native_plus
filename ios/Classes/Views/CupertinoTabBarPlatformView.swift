@@ -2,6 +2,23 @@ import Flutter
 import UIKit
 import SVGKit
 
+/// Container that reports when it is attached to a window or its horizontal size class changes.
+private final class TabBarContainerView: UIView {
+  var onLayoutEnvironmentChanged: (() -> Void)?
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window != nil { onLayoutEnvironmentChanged?() }
+  }
+
+  override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+    super.traitCollectionDidChange(previousTraitCollection)
+    if previousTraitCollection?.horizontalSizeClass != traitCollection.horizontalSizeClass {
+      onLayoutEnvironmentChanged?()
+    }
+  }
+}
+
 class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
   private let channel: FlutterMethodChannel
   private let container: UIView
@@ -29,10 +46,16 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
   private var leftInsetVal: CGFloat = 0
   private var rightInsetVal: CGFloat = 0
   private var splitSpacingVal: CGFloat = 12 // Apple's recommended spacing for visual separation
+  private var lastReportedSize: CGSize = .zero
+  // The "refresh" call cycles the selection with item references; a relayout swaps the items, so run them one at a time
+  private var refreshesInFlight = 0
+  private var isRefreshing: Bool { refreshesInFlight > 0 }
+  private var relayoutPending = false
+  private var relayoutScheduled = false
 
   init(frame: CGRect, viewId: Int64, args: Any?, messenger: FlutterBinaryMessenger) {
     self.channel = FlutterMethodChannel(name: "CupertinoNativeTabBar_\(viewId)", binaryMessenger: messenger)
-    self.container = UIView(frame: frame)
+    self.container = TabBarContainerView(frame: frame)
 
     var labels: [String] = []
     var symbols: [String] = []
@@ -108,6 +131,9 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
 
     super.init()
 
+    (container as? TabBarContainerView)?.onLayoutEnvironmentChanged = { [weak self] in
+      self?.relayoutItemsForCurrentEnvironment()
+    }
     container.backgroundColor = .clear
     if #available(iOS 13.0, *) { container.overrideUserInterfaceStyle = isDark ? .dark : .light }
 
@@ -336,6 +362,7 @@ channel.setMethodCallHandler { [weak self] call, result in
       case "getIntrinsicSize":
         if let bar = self.tabBar ?? self.tabBarLeft ?? self.tabBarRight {
           let size = bar.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+          self.lastReportedSize = size
           result(["width": Double(size.width), "height": Double(size.height)])
         } else {
           result(["width": Double(self.container.bounds.width), "height": 50.0])
@@ -660,6 +687,8 @@ channel.setMethodCallHandler { [weak self] call, result in
             }
           }
           self.isSplit = split; self.rightCountVal = rightCount; self.leftInsetVal = leftInset; self.rightInsetVal = rightInset
+          // The new bars got their items before joining the window; on iPad that leaves the titles truncated
+          if self.container.window != nil { self.relayoutItemsForCurrentEnvironment() }
           result(nil)
         } else { result(FlutterError(code: "bad_args", message: "Missing layout", details: nil)) }
       case "setSelectedIndex":
@@ -716,25 +745,30 @@ channel.setMethodCallHandler { [weak self] call, result in
         // UITabBar only fully layouts labels when items are selected
         // So we need to temporarily select each item to force layout
         if let bar = self.tabBar, let items = bar.items, !items.isEmpty {
-          let originalSelected = bar.selectedItem
+          let originalIndex = bar.selectedItem.flatMap { items.firstIndex(of: $0) }
           // Temporarily remove delegate to prevent callbacks during refresh
           bar.delegate = nil
-          DispatchQueue.main.async { [weak self, weak bar, weak originalSelected] in
-            guard let self = self, let bar = bar, let items = bar.items, !items.isEmpty else { return }
+          self.refreshesInFlight += 1
+          DispatchQueue.main.async { [weak self, weak bar] in
+            guard let self = self else { return }
+            guard let bar = bar, let items = bar.items, !items.isEmpty else { self.finishRefresh(); return }
             // Cycle through each item to force label layout
             var index = 0
             func selectNext() {
               guard index < items.count else {
-                // Restore original selection
-                if let original = originalSelected {
-                  bar.selectedItem = original
-                } else {
-                  bar.selectedItem = items.first
+                // Restore original selection (by index, against the bar's current items)
+                if let current = bar.items, !current.isEmpty {
+                  if let i = originalIndex, i < current.count {
+                    bar.selectedItem = current[i]
+                  } else {
+                    bar.selectedItem = current.first
+                  }
                 }
                 bar.setNeedsLayout()
                 bar.layoutIfNeeded()
                 // Restore delegate
                 bar.delegate = self
+                self.finishRefresh()
                 return
               }
               bar.selectedItem = items[index]
@@ -753,9 +787,11 @@ channel.setMethodCallHandler { [weak self] call, result in
           // Temporarily remove delegates to prevent callbacks during refresh
           left.delegate = nil
           right.delegate = nil
+          self.refreshesInFlight += 1
           DispatchQueue.main.async { [weak self, weak left, weak right, weak leftOriginal, weak rightOriginal] in
-            guard let self = self, let left = left, let right = right,
-                  let leftItems = left.items, let rightItems = right.items else { return }
+            guard let self = self else { return }
+            guard let left = left, let right = right,
+                  let leftItems = left.items, let rightItems = right.items else { self.finishRefresh(); return }
             
             // Process left items
             var leftIndex = 0
@@ -801,6 +837,7 @@ channel.setMethodCallHandler { [weak self] call, result in
                     // Restore delegates
                     left.delegate = self
                     right.delegate = self
+                    self.finishRefresh()
                   }
                 }
                 selectNextRight()
@@ -817,6 +854,58 @@ channel.setMethodCallHandler { [weak self] call, result in
   }
 
   func view() -> UIView { container }
+
+  /// On iPad (regular width, iOS 26) the tab buttons are sized from their titles when the items are set.
+  /// Items set before the bar has a window are measured too narrow, so titles stay truncated ("Cal…")
+  /// until the selection changes. Re-assign the items once the bar is on screen (or its size class
+  /// changes), then tell Flutter the new fitting size so the platform view is resized to match.
+  private func relayoutItemsForCurrentEnvironment() {
+    // didMoveToWindow and traitCollectionDidChange can both fire for one attach; run once
+    guard !relayoutScheduled else { return }
+    relayoutScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.relayoutScheduled = false
+      if self.isRefreshing {
+        self.relayoutPending = true
+        return
+      }
+      for bar in [self.tabBar, self.tabBarLeft, self.tabBarRight].compactMap({ $0 }) {
+        guard let items = bar.items, !items.isEmpty else { continue }
+        // Re-assigning the same item objects is ignored, so hand the bar fresh copies
+        let selectedIndex = bar.selectedItem.flatMap { items.firstIndex(of: $0) }
+        let copies = items.map(Self.copyItem)
+        let delegate = bar.delegate
+        bar.delegate = nil
+        bar.items = copies
+        if let index = selectedIndex { bar.selectedItem = copies[index] }
+        bar.delegate = delegate
+        bar.setNeedsLayout()
+        bar.layoutIfNeeded()
+      }
+      guard let bar = self.tabBar ?? self.tabBarLeft ?? self.tabBarRight else { return }
+      let size = bar.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+      guard size.width > 0, size.height > 0, size != self.lastReportedSize else { return }
+      self.lastReportedSize = size
+      self.channel.invokeMethod("intrinsicSizeChanged", arguments: ["width": Double(size.width), "height": Double(size.height)])
+    }
+  }
+
+  private func finishRefresh() {
+    refreshesInFlight = max(0, refreshesInFlight - 1)
+    guard !isRefreshing else { return }
+    if relayoutPending {
+      relayoutPending = false
+      relayoutItemsForCurrentEnvironment()
+    }
+  }
+
+  /// Copies everything buildItems sets on an item. Keep in sync with buildItems when it sets more properties.
+  private static func copyItem(_ item: UITabBarItem) -> UITabBarItem {
+    let copy = UITabBarItem(title: item.title, image: item.image, selectedImage: item.selectedImage)
+    copy.badgeValue = item.badgeValue
+    return copy
+  }
 
   func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
     // Single bar case
