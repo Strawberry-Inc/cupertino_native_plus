@@ -434,8 +434,25 @@ class _CNTabBarState extends State<CNTabBar> {
         widget.onTap(idx);
         _lastIndex = idx;
       }
+    } else if (call.method == 'intrinsicSizeChanged') {
+      // Sent by iOS once the bar is on screen or its size class changes
+      // (on iPad the size measured right after creation is too narrow).
+      _applyIntrinsicSize(call.arguments as Map?);
     }
     return null;
+  }
+
+  void _applyIntrinsicSize(Map? size) {
+    if (!mounted || widget.height != null) return;
+    final h = (size?['height'] as num?)?.toDouble();
+    final w = (size?['width'] as num?)?.toDouble();
+    final newH = h != null && h > 0 ? h : _intrinsicHeight;
+    final newW = w != null && w > 0 ? w : _intrinsicWidth;
+    if (newH == _intrinsicHeight && newW == _intrinsicWidth) return;
+    setState(() {
+      if (h != null && h > 0) _intrinsicHeight = h;
+      if (w != null && w > 0) _intrinsicWidth = w;
+    });
   }
 
   Future<void> _syncPropsToNativeIfNeeded() async {
@@ -597,13 +614,7 @@ class _CNTabBarState extends State<CNTabBar> {
     if (ch == null) return;
     try {
       final size = await ch.invokeMethod<Map>('getIntrinsicSize');
-      final h = (size?['height'] as num?)?.toDouble();
-      final w = (size?['width'] as num?)?.toDouble();
-      if (!mounted) return;
-      setState(() {
-        if (h != null && h > 0) _intrinsicHeight = h;
-        if (w != null && w > 0) _intrinsicWidth = w;
-      });
+      _applyIntrinsicSize(size);
     } catch (_) {}
   }
 }
