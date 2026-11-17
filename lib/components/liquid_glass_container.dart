@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../channel/params.dart';
+import '../channel/view_types.dart';
 import '../style/glass_effect.dart';
+import '../utils/platform_view_builder.dart';
 import '../utils/theme_helper.dart';
+import '../utils/platform_view_guard.dart';
 import '../utils/version_detector.dart';
 
 /// A container that applies Liquid Glass effects to its child widget.
@@ -36,8 +39,25 @@ class LiquidGlassContainer extends StatefulWidget {
 class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
   MethodChannel? _channel;
   bool? _lastIsDark;
+  // Stable key: never changes for the lifetime of this State so Flutter
+  // always reuses the platform view instead of recreating it on config changes.
+  // Config changes are applied via updateConfig over the method channel.
+  final _viewKey = UniqueKey();
 
   bool get _isDark => ThemeHelper.isDark(context);
+
+  @override
+  void initState() {
+    super.initState();
+    if (!PlatformViewGuard.isReady) {
+      PlatformViewGuard.ensureScheduled();
+      PlatformViewGuard.readyNotifier.addListener(_onPlatformViewGuardReady);
+    }
+  }
+
+  void _onPlatformViewGuardReady() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void didChangeDependencies() {
@@ -54,14 +74,24 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
   }
 
   @override
+  void dispose() {
+    PlatformViewGuard.readyNotifier.removeListener(_onPlatformViewGuardReady);
+    _channel?.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isIOSOrMacOS =
         defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS;
-    final shouldUseNative = isIOSOrMacOS && PlatformVersion.supportsLiquidGlass;
+    final shouldUseNative =
+        isIOSOrMacOS &&
+        PlatformVersion.supportsLiquidGlass &&
+        PlatformViewGuard.isReady;
 
     if (!shouldUseNative) {
-      // On unsupported platforms or versions, just return the child
+      // On unsupported platforms, versions, or while guard is not ready
       return widget.child;
     }
 
@@ -70,7 +100,7 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
   }
 
   Widget _buildNativeContainer(BuildContext context) {
-    const viewType = 'CupertinoNativeLiquidGlassContainer';
+    const viewType = ViewTypes.cupertinoNativeLiquidGlassContainer;
 
     // Convert config to creation params
     final creationParams = <String, dynamic>{
@@ -84,45 +114,33 @@ class _LiquidGlassContainerState extends State<LiquidGlassContainer> {
       'isDark': ThemeHelper.isDark(context),
     };
 
-    final platformView = defaultTargetPlatform == TargetPlatform.iOS
-        ? UiKitView(
-            viewType: viewType,
-            creationParams: creationParams,
-            creationParamsCodec: const StandardMessageCodec(),
-            onPlatformViewCreated: _onCreated,
-          )
-        : AppKitView(
-            viewType: viewType,
-            creationParams: creationParams,
-            creationParamsCodec: const StandardMessageCodec(),
-            onPlatformViewCreated: _onCreated,
-          );
+    // Stable key: reuses the platform view across rebuilds; config changes
+    // go through updateConfig via the method channel (no flash/recreation).
+    final platformView = buildCupertinoPlatformView(
+      context,
+      key: _viewKey,
+      viewType: viewType,
+      creationParams: creationParams,
+      onPlatformViewCreated: _onCreated,
+    );
 
-    // Use a Stack where the child determines the size
-    // The platform view fills the child's bounds exactly
-    // Use Align with widthFactor and heightFactor null to size to child
-    // Then use StackFit.passthrough to size the Stack to its child
-    return Align(
-      alignment: Alignment.topLeft,
-      widthFactor: null,
-      heightFactor: null,
-      child: Stack(
-        clipBehavior: Clip.none,
-        fit: StackFit.passthrough,
-        children: [
-          // Glass effect background from native view - sized to match child
-          // Wrap in IgnorePointer so the platform view never intercepts touches
-          Positioned.fill(child: IgnorePointer(child: platformView)),
-          // Child content rendered on top - determines the size
-          // This will size the Stack, and Positioned.fill will match it
-          widget.child,
-        ],
-      ),
+    // Stack sizes itself to its largest non-positioned child (widget.child).
+    // Positioned.fill then fills those exact bounds with the native glass view.
+    // IgnorePointer ensures the platform view never intercepts Flutter touches.
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: IgnorePointer(child: platformView)),
+        widget.child,
+      ],
     );
   }
 
   void _onCreated(int id) {
-    _channel = MethodChannel('CupertinoNativeLiquidGlassContainer_$id');
+    _channel = ViewTypes.methodChannelFor(
+      ViewTypes.cupertinoNativeLiquidGlassContainer,
+      id,
+    );
     _channel!.setMethodCallHandler((call) async {
       // Handle any method calls from native side if needed
       return null;

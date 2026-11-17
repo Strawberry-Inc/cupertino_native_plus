@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show TabController, TabBarView, Colors;
-import 'package:cupertino_native_plus/cupertino_native.dart';
+import 'package:cupertino_native_plus/cupertino_native_plus.dart';
 
 class TabBarDemoPage extends StatefulWidget {
   const TabBarDemoPage({super.key});
@@ -14,6 +14,38 @@ class _TabBarDemoPageState extends State<TabBarDemoPage>
   late final TabController _controller;
   int _index = 0;
   bool _useAlternateIcons = false;
+  bool _splitRightAsButton = false;
+
+  // Label style state
+  int _labelStyleIndex = 0; // 0 = default, 1 = bold+large, 2 = Georgia italic
+
+  static const _labelStyleOptions = ['Default', 'Bold/Large', 'Georgia'];
+
+  TextStyle? get _labelStyle {
+    switch (_labelStyleIndex) {
+      case 1:
+        return const TextStyle(fontWeight: FontWeight.w300, fontSize: 11);
+      case 2:
+        return const TextStyle(fontFamily: 'Georgia', fontSize: 11);
+      default:
+        return null;
+    }
+  }
+
+  TextStyle? get _activeLabelStyle {
+    switch (_labelStyleIndex) {
+      case 1:
+        return const TextStyle(fontWeight: FontWeight.w700, fontSize: 16);
+      case 2:
+        return const TextStyle(
+          fontFamily: 'Georgia',
+          fontSize: 16,
+          fontStyle: FontStyle.italic,
+        );
+      default:
+        return null;
+    }
+  }
 
   @override
   void initState() {
@@ -57,65 +89,63 @@ class _TabBarDemoPageState extends State<TabBarDemoPage>
             child: CNTabBar(
               items: _useAlternateIcons
                   ? [
-                      // Alternate SVG icons to test setState
                       CNTabBarItem(
                         label: 'Home',
-                        imageAsset: CNImageAsset('assets/icons/profile.svg'),
-                        activeImageAsset: CNImageAsset(
+                        icon: CNIcon.asset('assets/icons/profile.svg'),
+                        activeIcon: CNIcon.asset(
                           'assets/icons/profile-filled.svg',
                         ),
                         badge: '5',
                       ),
                       CNTabBarItem(
                         label: 'Search',
-                        imageAsset: CNImageAsset('assets/icons/chat.svg'),
-                        activeImageAsset: CNImageAsset(
+                        icon: CNIcon.asset('assets/icons/chat.svg'),
+                        activeIcon: CNIcon.asset(
                           'assets/icons/chat-filled.svg',
                         ),
-                        badge: '',
+                        badge: '8',
                       ),
                       CNTabBarItem(
                         label: 'Profile',
-                        imageAsset: CNImageAsset('assets/icons/home.svg'),
-                        activeImageAsset: CNImageAsset(
+                        icon: CNIcon.asset('assets/icons/home.svg'),
+                        activeIcon: CNIcon.asset(
                           'assets/icons/home_filled.svg',
                         ),
                       ),
                       CNTabBarItem(
-                        imageAsset: CNImageAsset('assets/icons/search.svg'),
-                        activeImageAsset: CNImageAsset(
+                        icon: CNIcon.asset('assets/icons/search.svg'),
+                        activeIcon: CNIcon.asset(
                           'assets/icons/search-filled.svg',
                         ),
                       ),
                     ]
                   : [
-                      // Original SVG icons
                       CNTabBarItem(
                         label: 'Home',
-                        imageAsset: CNImageAsset('assets/icons/home.svg'),
-                        activeImageAsset: CNImageAsset(
+                        icon: CNIcon.asset('assets/icons/home.svg'),
+                        activeIcon: CNIcon.asset(
                           'assets/icons/home_filled.svg',
                         ),
                         badge: '3',
                       ),
                       CNTabBarItem(
                         label: 'Search',
-                        imageAsset: CNImageAsset('assets/icons/search.svg'),
-                        activeImageAsset: CNImageAsset(
+                        icon: CNIcon.asset('assets/icons/search.svg'),
+                        activeIcon: CNIcon.asset(
                           'assets/icons/search-filled.svg',
                         ),
-                        badge: ' ',
+                        badge: '12',
                       ),
                       CNTabBarItem(
                         label: 'Profile',
-                        imageAsset: CNImageAsset('assets/icons/profile.svg'),
-                        activeImageAsset: CNImageAsset(
+                        icon: CNIcon.asset('assets/icons/profile.svg'),
+                        activeIcon: CNIcon.asset(
                           'assets/icons/profile-filled.svg',
                         ),
                       ),
                       CNTabBarItem(
-                        imageAsset: CNImageAsset('assets/icons/chat.svg'),
-                        activeImageAsset: CNImageAsset(
+                        icon: CNIcon.asset('assets/icons/chat.svg'),
+                        activeIcon: CNIcon.asset(
                           'assets/icons/chat-filled.svg',
                         ),
                       ),
@@ -125,38 +155,146 @@ class _TabBarDemoPageState extends State<TabBarDemoPage>
               rightCount: 1,
               splitSpacing: 8,
               shrinkCentered: true,
+              splitRightAsButton: _splitRightAsButton,
               tint: Colors.red,
-              boldLabels: true,
+              labelStyle: _labelStyle,
+              activeLabelStyle: _activeLabelStyle,
               onTap: (i) {
+                if (_splitRightAsButton && i >= 3) {
+                  // Right item acts as a button — show an action instead of selecting
+                  showCupertinoDialog(
+                    context: context,
+                    builder: (_) => CupertinoAlertDialog(
+                      title: const Text('Button tapped'),
+                      content: const Text(
+                        'The right split item is acting as a button.',
+                      ),
+                      actions: [
+                        CupertinoDialogAction(
+                          child: const Text('OK'),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  );
+                  return;
+                }
                 setState(() => _index = i);
                 _controller.animateTo(i);
               },
             ),
           ),
-          // Cupertino button to test setState
+          // Controls overlay
           Positioned(
             top: 100,
             right: 20,
-            child: CupertinoButton(
-              onPressed: () {
-                setState(() {
-                  _useAlternateIcons = !_useAlternateIcons;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemBlue.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(25),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              spacing: 8,
+              children: [
+                // Toggle icons button
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () {
+                    setState(() {
+                      _useAlternateIcons = !_useAlternateIcons;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemBlue.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    child: Icon(
+                      _useAlternateIcons
+                          ? CupertinoIcons.refresh
+                          : CupertinoIcons.arrow_2_squarepath,
+                      color: CupertinoColors.white,
+                      size: 24,
+                    ),
+                  ),
                 ),
-                child: Icon(
-                  _useAlternateIcons
-                      ? CupertinoIcons.refresh
-                      : CupertinoIcons.arrow_2_squarepath,
-                  color: CupertinoColors.white,
-                  size: 24,
+                // Toggle splitRightAsButton
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () {
+                    setState(() {
+                      _splitRightAsButton = !_splitRightAsButton;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _splitRightAsButton
+                          ? CupertinoColors.systemGreen.withValues(alpha: 0.8)
+                          : CupertinoColors.systemGrey.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.hand_draw,
+                      color: CupertinoColors.white,
+                      size: 24,
+                    ),
+                  ),
                 ),
-              ),
+                // Label style picker
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemBackground
+                        .resolveFrom(context)
+                        .withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: CupertinoColors.black.withOpacity(0.12),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: 4,
+                    children: [
+                      const Text(
+                        'Label Style',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: CupertinoColors.secondaryLabel,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      for (int i = 0; i < _labelStyleOptions.length; i++)
+                        GestureDetector(
+                          onTap: () => setState(() => _labelStyleIndex = i),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            spacing: 6,
+                            children: [
+                              Icon(
+                                _labelStyleIndex == i
+                                    ? CupertinoIcons.checkmark_circle_fill
+                                    : CupertinoIcons.circle,
+                                size: 16,
+                                color: _labelStyleIndex == i
+                                    ? CupertinoColors.systemBlue
+                                    : CupertinoColors.tertiaryLabel,
+                              ),
+                              Text(
+                                _labelStyleOptions[i],
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
