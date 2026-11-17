@@ -128,6 +128,11 @@ class GlassButtonGroupPlatformView: NSObject, FlutterPlatformView {
     self.hostingController.view.layoutMargins = .zero
     self.hostingController.view.directionalLayoutMargins = .zero
     self.hostingController.additionalSafeAreaInsets = .zero
+    // Flutter places and sizes this platform view, so the window's safe area
+    // must not move the buttons inside it. Otherwise a safe area that overlaps
+    // the group pushes them out of it: while an iPhone Duo's hinge opens, the
+    // window briefly has a top inset, and the buttons stayed ~54pt too low.
+    self.hostingController.safeAreaRegions = []
 
     super.init()
 
