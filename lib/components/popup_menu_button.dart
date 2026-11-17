@@ -1,17 +1,21 @@
+import 'package:equatable/equatable.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 import '../channel/params.dart';
+import '../channel/view_types.dart';
 import '../style/button_style.dart';
+import '../utils/platform_view_builder.dart';
 import '../style/sf_symbol.dart';
 import '../utils/icon_renderer.dart';
 import '../utils/theme_helper.dart';
 import '../utils/version_detector.dart';
+import 'icon.dart';
 
 /// Base type for entries in a [CNPopupMenuButton] menu.
-abstract class CNPopupMenuEntry {
+abstract class CNPopupMenuEntry extends Equatable {
   /// Const constructor for subclasses.
   const CNPopupMenuEntry();
 }
@@ -41,7 +45,7 @@ class CNPopupMenuItem extends CNPopupMenuEntry {
 
   /// Optional image asset (SVG, PNG, etc.) shown before the label.
   /// If provided, this takes precedence over [icon] and [customIcon].
-  final CNImageAsset? imageAsset;
+  final CNIcon? imageAsset;
 
   /// Optional color for custom icons. This applies a tint color to the custom icon.
   /// For SF Symbols, use the [icon]'s color parameter instead.
@@ -49,12 +53,25 @@ class CNPopupMenuItem extends CNPopupMenuEntry {
 
   /// Whether the item can be selected.
   final bool enabled;
+
+  @override
+  List<Object?> get props => [
+    label,
+    icon,
+    customIcon,
+    imageAsset,
+    iconColor,
+    enabled,
+  ];
 }
 
 /// A visual divider between popup menu items.
 class CNPopupMenuDivider extends CNPopupMenuEntry {
   /// Creates a visual divider between items.
   const CNPopupMenuDivider();
+
+  @override
+  List<Object?> get props => const [];
 }
 
 // Reusable style enum for buttons across widgets (popup menu, future CNButton, ...)
@@ -73,6 +90,8 @@ class CNPopupMenuButton extends StatefulWidget {
     this.height = 32.0,
     this.shrinkWrap = false,
     this.buttonStyle = CNButtonStyle.plain,
+    this.preserveTopToBottomOrder = false,
+    this.labelStyle,
   }) : buttonIcon = null,
        buttonCustomIcon = null,
        buttonImageAsset = null,
@@ -90,11 +109,13 @@ class CNPopupMenuButton extends StatefulWidget {
     this.tint,
     double size = 44.0, // button diameter (width = height)
     this.buttonStyle = CNButtonStyle.glass,
+    this.preserveTopToBottomOrder = false,
   }) : buttonLabel = null,
        round = true,
        width = size,
        height = size,
        shrinkWrap = false,
+       labelStyle = null,
        super() {
     assert(
       buttonIcon != null ||
@@ -104,24 +125,27 @@ class CNPopupMenuButton extends StatefulWidget {
     );
   }
 
-  /// Text for the button (null when using [buttonIcon]).
-  final String? buttonLabel; // null in icon mode
-  /// Icon for the button (non-null in icon mode).
-  /// Priority: [buttonImageAsset] > [buttonCustomIcon] > [buttonIcon]
-  final CNSymbol? buttonIcon; // non-null in icon mode
-  /// Optional custom icon from CupertinoIcons, Icons, or any IconData for the button.
-  /// If provided, this takes precedence over [buttonIcon] but not [buttonImageAsset].
+  /// Text label for the button. `null` in icon-only mode.
+  final String? buttonLabel;
+
+  /// SF Symbol icon for the button.
+  /// Priority: [buttonImageAsset] > [buttonCustomIcon] > [buttonIcon].
+  final CNSymbol? buttonIcon;
+
+  /// Custom icon from [CupertinoIcons], [Icons], or any [IconData].
+  /// Takes precedence over [buttonIcon] but not [buttonImageAsset].
   final IconData? buttonCustomIcon;
 
-  /// Optional image asset (SVG, PNG, etc.) for the button icon.
-  /// If provided, this takes precedence over [buttonIcon] and [buttonCustomIcon].
-  final CNImageAsset? buttonImageAsset;
-  // Fixed size (width = height) when in icon mode.
-  /// Fixed width in icon mode; otherwise computed/intrinsic.
+  /// Image asset (SVG, PNG, etc.) for the button icon.
+  /// Takes precedence over both [buttonIcon] and [buttonCustomIcon].
+  final CNIcon? buttonImageAsset;
+
+  /// Fixed width. In icon mode this equals the button diameter.
   final double? width;
 
-  /// Whether this is the round icon variant.
-  final bool round; // internal: text=false, icon=true
+  /// `true` when using the round icon variant, `false` for the text variant.
+  final bool round;
+
   /// Entries that populate the popup menu.
   final List<CNPopupMenuEntry> items;
 
@@ -140,6 +164,19 @@ class CNPopupMenuButton extends StatefulWidget {
   /// Visual style to apply to the button.
   final CNButtonStyle buttonStyle;
 
+  /// When true, items maintain top-to-bottom order even when menu opens upward.
+  ///
+  /// By default (false), iOS native behavior keeps the first item closest to
+  /// the button. When the menu opens upward, this means item 1 appears at the
+  /// bottom. Set to true to always display items 1,2,3,4 from top to bottom.
+  final bool preserveTopToBottomOrder;
+
+  /// Optional text style for the trigger button label.
+  ///
+  /// Only applies to the text variant (created with the default constructor).
+  /// Has no effect on icon-only buttons.
+  final TextStyle? labelStyle;
+
   /// Whether this instance is configured as an icon button variant.
   bool get isIconButton =>
       buttonIcon != null ||
@@ -151,6 +188,7 @@ class CNPopupMenuButton extends StatefulWidget {
 }
 
 class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
+  final _viewKey = UniqueKey();
   MethodChannel? _channel;
   bool? _lastIsDark;
   int? _lastTint;
@@ -160,6 +198,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
   int? _lastIconColor;
   double? _intrinsicWidth;
   CNButtonStyle? _lastStyle;
+  Map<String, dynamic>? _lastLabelStyle;
   Offset? _downPosition;
   bool _pressed = false;
 
@@ -303,7 +342,45 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
     BuildContext context, {
     Map<String, dynamic>? customIconData,
   }) async {
-    const viewType = 'CupertinoNativePopupMenuButton';
+    const viewType = ViewTypes.cupertinoNativePopupMenuButton;
+
+    // Capture all context-derived values before any async operations
+    final capturedIsDark = _isDark;
+    final capturedStyle = encodeStyle(context, tint: _effectiveTint);
+    final capturedButtonIconColor = resolveColorToArgb(
+      widget.buttonImageAsset?.color ?? widget.buttonIcon?.color,
+      context,
+    );
+    final capturedButtonPaletteColors = widget.buttonIcon?.paletteColors
+        ?.map((c) => resolveColorToArgb(c, context))
+        .toList();
+    final capturedLabelStyle = encodeTextStyle(widget.labelStyle, context);
+    // Pre-capture menu item colors
+    final capturedMenuItemColors = <int?>[];
+    final capturedMenuItemIconColors = <int?>[];
+    final capturedMenuItemPalettes = <List<int?>?>[];
+    for (final item in widget.items) {
+      if (item is CNPopupMenuItem) {
+        capturedMenuItemIconColors.add(
+          resolveColorToArgb(item.iconColor, context),
+        );
+        capturedMenuItemColors.add(
+          resolveColorToArgb(
+            item.imageAsset?.color ?? item.icon?.color,
+            context,
+          ),
+        );
+        capturedMenuItemPalettes.add(
+          item.icon?.paletteColors
+              ?.map((c) => resolveColorToArgb(c, context))
+              .toList(),
+        );
+      } else {
+        capturedMenuItemIconColors.add(null);
+        capturedMenuItemColors.add(null);
+        capturedMenuItemPalettes.add(null);
+      }
+    }
 
     // Resolve button image asset path if present
     String? resolvedButtonAssetPath;
@@ -313,6 +390,18 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
         widget.buttonImageAsset!.assetPath,
       );
     }
+    if (!mounted) return const SizedBox();
+
+    // Resolve menu item image assets concurrently
+    final resolvedMenuPaths = await Future.wait(
+      widget.items.map((e) async {
+        if (e is CNPopupMenuItem && e.imageAsset != null) {
+          return await resolveAssetPathForPixelRatio(e.imageAsset!.assetPath);
+        }
+        return null;
+      }),
+    );
+    if (!mounted) return const SizedBox();
 
     final buttonIconBytes = customIconData?['buttonIconBytes'] as Uint8List?;
     final menuIconBytes =
@@ -335,7 +424,8 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
     final gradients = <bool?>[];
 
     var menuIconIndex = 0;
-    for (final e in widget.items) {
+    for (var i = 0; i < widget.items.length; i++) {
+      final e = widget.items[i];
       if (e is CNPopupMenuDivider) {
         labels.add('');
         symbols.add('');
@@ -351,7 +441,6 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
         modes.add(null);
         palettes.add(null);
         gradients.add(null);
-        menuIconIndex++;
       } else if (e is CNPopupMenuItem) {
         labels.add(e.label);
         symbols.add(e.icon?.name ?? '');
@@ -360,14 +449,12 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
               ? menuIconBytes[menuIconIndex]
               : null,
         );
-        customIconColors.add(resolveColorToArgb(e.iconColor, context));
+        customIconColors.add(capturedMenuItemIconColors[i]);
 
         // Handle imageAsset for menu items
         if (e.imageAsset != null) {
-          // Resolve asset path based on device pixel ratio
-          final resolvedPath = await resolveAssetPathForPixelRatio(
-            e.imageAsset!.assetPath,
-          );
+          // Use pre-resolved path
+          final resolvedPath = resolvedMenuPaths[i]!;
           imageAssetPaths.add(resolvedPath);
           imageAssetData.add(e.imageAsset!.imageData);
           // Auto-detect format if not provided (use resolved path)
@@ -384,16 +471,10 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
 
         isDivider.add(false);
         enabled.add(e.enabled);
-        sizes.add(e.imageAsset?.size ?? e.icon?.size);
-        colors.add(
-          resolveColorToArgb(e.imageAsset?.color ?? e.icon?.color, context),
-        );
+        sizes.add(e.imageAsset?.size.width ?? e.icon?.size);
+        colors.add(capturedMenuItemColors[i]);
         modes.add(e.imageAsset?.mode?.name ?? e.icon?.mode?.name);
-        palettes.add(
-          e.icon?.paletteColors
-              ?.map((c) => resolveColorToArgb(c, context))
-              .toList(),
-        );
+        palettes.add(capturedMenuItemPalettes[i]);
         gradients.add(e.imageAsset?.gradient ?? e.icon?.gradient);
         menuIconIndex++;
       }
@@ -418,13 +499,11 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
       },
       if (widget.buttonIcon != null) 'buttonIconName': widget.buttonIcon!.name,
       'buttonIconSize':
-          widget.buttonImageAsset?.size ?? widget.buttonIcon?.size ?? 20.0,
-      if (widget.buttonImageAsset?.color != null ||
-          widget.buttonIcon?.color != null)
-        'buttonIconColor': resolveColorToArgb(
-          widget.buttonImageAsset?.color ?? widget.buttonIcon!.color,
-          context,
-        ),
+          widget.buttonImageAsset?.size.width ??
+          widget.buttonIcon?.size ??
+          20.0,
+      if (capturedButtonIconColor != null)
+        'buttonIconColor': capturedButtonIconColor,
       if (widget.isIconButton) 'round': true,
       'buttonStyle': widget.buttonStyle.name,
       'labels': labels,
@@ -441,61 +520,28 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
       'sfSymbolRenderingModes': modes,
       'sfSymbolPaletteColors': palettes,
       'sfSymbolGradientEnabled': gradients,
-      'isDark': _isDark,
-      'style': encodeStyle(context, tint: _effectiveTint),
+      'isDark': capturedIsDark,
+      'style': capturedStyle,
       if (widget.buttonIcon?.mode != null)
         'buttonIconRenderingMode': widget.buttonIcon!.mode!.name,
-      if (widget.buttonIcon?.paletteColors != null)
-        'buttonIconPaletteColors': widget.buttonIcon!.paletteColors!
-            .map((c) => resolveColorToArgb(c, context))
-            .toList(),
+      if (capturedButtonPaletteColors != null)
+        'buttonIconPaletteColors': capturedButtonPaletteColors,
       if (widget.buttonIcon?.gradient != null)
         'buttonIconGradientEnabled': widget.buttonIcon!.gradient,
+      'preserveTopToBottomOrder': widget.preserveTopToBottomOrder,
+      if (capturedLabelStyle != null) 'labelStyle': capturedLabelStyle,
     };
 
-    // Create a comprehensive key that includes all parameters affecting platform view creation
-    final buttonIconKey =
-        '${widget.buttonLabel}_${widget.buttonIcon?.name}_${widget.buttonImageAsset?.assetPath}_${widget.buttonImageAsset?.imageData?.length ?? 0}_${widget.buttonCustomIcon?.hashCode ?? 0}';
-    final itemsKey = widget.items
-        .map((e) {
-          if (e is CNPopupMenuItem) {
-            return '${e.label}_${e.icon?.name}_${e.imageAsset?.assetPath}_${e.imageAsset?.imageData?.length ?? 0}_${e.customIcon?.hashCode ?? 0}';
-          }
-          return 'divider';
-        })
-        .join('|');
-    final viewKey = ValueKey(
-      'popupMenu_'
-      '$buttonIconKey|'
-      '$itemsKey|'
-      '${widget.buttonStyle.name}_'
-      '${widget.height}_'
-      '${widget.width}_'
-      '${widget.tint?.value}_'
-      '$_isDark',
+    final platformView = buildCupertinoPlatformView(
+      context,
+      key: _viewKey,
+      viewType: viewType,
+      creationParams: creationParams,
+      onPlatformViewCreated: _onCreated,
+      gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+        Factory<TapGestureRecognizer>(() => TapGestureRecognizer()),
+      },
     );
-
-    final platformView = defaultTargetPlatform == TargetPlatform.iOS
-        ? UiKitView(
-            key: viewKey,
-            viewType: viewType,
-            creationParams: creationParams,
-            creationParamsCodec: const StandardMessageCodec(),
-            onPlatformViewCreated: _onCreated,
-            gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-              Factory<TapGestureRecognizer>(() => TapGestureRecognizer()),
-            },
-          )
-        : AppKitView(
-            key: viewKey,
-            viewType: viewType,
-            creationParams: creationParams,
-            creationParamsCodec: const StandardMessageCodec(),
-            onPlatformViewCreated: _onCreated,
-            gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-              Factory<TapGestureRecognizer>(() => TapGestureRecognizer()),
-            },
-          );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -544,7 +590,10 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
   }
 
   void _onCreated(int id) {
-    final ch = MethodChannel('CupertinoNativePopupMenuButton_$id');
+    final ch = ViewTypes.methodChannelFor(
+      ViewTypes.cupertinoNativePopupMenuButton,
+      id,
+    );
     _channel = ch;
     ch.setMethodCallHandler(_onMethodCall);
     _lastTint = resolveColorToArgb(_effectiveTint, context);
@@ -615,7 +664,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
         updSymbols.add(e.icon?.name ?? '');
         updIsDivider.add(false);
         updEnabled.add(e.enabled);
-        updSizes.add(e.imageAsset?.size ?? e.icon?.size);
+        updSizes.add(e.imageAsset?.size.width ?? e.icon?.size);
         updColors.add(
           resolveColorToArgb(e.imageAsset?.color ?? e.icon?.color, context),
         );
@@ -649,6 +698,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
     }
     // Capture context-dependent values before any awaits
     final tint = resolveColorToArgb(_effectiveTint, context);
+    final capturedLabelStyle = encodeTextStyle(widget.labelStyle, context);
     final preIconName = widget.buttonIcon?.name;
     final preIconSize = widget.buttonIcon?.size;
     final preIconColor = resolveColorToArgb(widget.buttonIcon?.color, context);
@@ -666,6 +716,10 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
       await ch.invokeMethod('setButtonTitle', {'title': widget.buttonLabel});
       _lastTitle = widget.buttonLabel;
       _requestIntrinsicSize();
+    }
+    if (_lastLabelStyle != capturedLabelStyle) {
+      await ch.invokeMethod('setTextStyle', capturedLabelStyle);
+      _lastLabelStyle = capturedLabelStyle;
     }
 
     if (widget.isIconButton) {
@@ -689,7 +743,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
               resolvedAssetPath,
               widget.buttonImageAsset!.imageData,
             );
-        updates['buttonIconSize'] = widget.buttonImageAsset!.size;
+        updates['buttonIconSize'] = widget.buttonImageAsset!.size.width;
         if (widget.buttonImageAsset!.color != null) {
           if (mounted) {
             updates['buttonIconColor'] = resolveColorToArgb(
@@ -820,8 +874,14 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
           if (selected != null) widget.onSelected(selected);
         },
         child: widget.isIconButton
-            ? Icon(CupertinoIcons.ellipsis, size: widget.buttonIcon?.size)
-            : Text(widget.buttonLabel ?? ''),
+            ? (widget.buttonIcon != null
+                  ? CNIconView(
+                      symbol: widget.buttonIcon,
+                      size: widget.buttonIcon!.size,
+                      color: widget.buttonIcon!.color,
+                    )
+                  : const SizedBox.shrink())
+            : Text(widget.buttonLabel ?? '', style: widget.labelStyle),
       ),
     );
   }
