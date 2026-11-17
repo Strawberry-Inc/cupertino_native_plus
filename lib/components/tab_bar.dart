@@ -133,7 +133,8 @@ class CNTabBar extends StatefulWidget {
   /// The index of the currently selected item.
   final int currentIndex;
 
-  /// Called when the user selects a new item.
+  /// Called when the user taps an item, including the selected one (to
+  /// scroll to the top, for example).
   final ValueChanged<int> onTap;
 
   /// Accent/tint color.
@@ -648,13 +649,11 @@ class _CNTabBarState extends State<CNTabBar> {
         debugPrint(
           '[CNTabBar Dart] valueChanged idx:$idx lastIndex:$_lastIndex isRightButton:$isRightButton currentIndex:${widget.currentIndex}',
         );
-        if (isRightButton) {
-          // Button mode: always fire callback, don't update _lastIndex
-          widget.onTap(idx);
-        } else if (idx != _lastIndex) {
-          widget.onTap(idx);
-          _lastIndex = idx;
-        }
+        // Fire on every tap, also on the selected tab (apps use that to
+        // scroll to the top, for example).
+        widget.onTap(idx);
+        // Button mode: don't update _lastIndex
+        if (!isRightButton) _lastIndex = idx;
       }
     } else if (call.method == 'searchTextChanged') {
       final args = call.arguments as Map?;
