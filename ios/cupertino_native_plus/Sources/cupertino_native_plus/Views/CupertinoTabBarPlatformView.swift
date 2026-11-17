@@ -146,6 +146,18 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
     }
   }
 
+  /// Badge text font for the blank system badge used as a dot (see applyBadges).
+  /// It has to be set on the appearance: the bars use one, and it wins over the
+  /// items' own badge text attributes.
+  @available(iOS 13.0, *)
+  private static func useDotBadgeFont(in ap: UITabBarAppearance) {
+    let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 6)]
+    for layout in [ap.stackedLayoutAppearance, ap.inlineLayoutAppearance, ap.compactInlineLayoutAppearance] {
+      layout.normal.badgeTextAttributes = attributes
+      layout.selected.badgeTextAttributes = attributes
+    }
+  }
+
   /// Parses badges from method channel: null = no badge, "" = dot only, non-empty = badge text.
   private static func parseBadges(_ any: Any?) -> [String?] {
     guard let arr = any as? [Any] else { return [] }
@@ -209,8 +221,22 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
       let shouldShow = Self.hasBadge(badge)
       let hasText = shouldShow && (badge.map { !Self.isBlankBadgeText($0) } ?? false)
       let wantsDotOnly = shouldShow && !hasText
+      let rawColor: UIColor? = (globalIndex < currentBadgeColors.count) ? currentBadgeColors[globalIndex].map { ImageUtils.colorFromARGB($0.intValue) } : nil
 
-      // Clear system badge; we draw all badges with custom views.
+      if wantsDotOnly, let item = bar.items?[localIndex] {
+        // Let UIKit draw the dot: it puts the badge on the item's icon in every
+        // layout. iconAnchor's guess (equal slots across the bar) lands on the
+        // wrong item when the items don't fill the bar, as in iPad's centered
+        // tab bar on iOS 26.
+        // UIKit doesn't draw an empty badge; a blank one in a tiny font (set on
+        // the bar's appearance, see useDotBadgeFont) is a small dot.
+        existing?.removeFromSuperview()
+        item.badgeColor = rawColor ?? bar.tintColor ?? .systemRed
+        item.badgeValue = " "
+        continue
+      }
+
+      // Clear system badge; we draw text badges with custom views.
       bar.items?[localIndex].badgeValue = nil
 
       if !shouldShow {
@@ -222,21 +248,13 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
       badgeView.tag = tag
       badgeView.isUserInteractionEnabled = false
       badgeView.layer.zPosition = 999
-      let rawColor: UIColor? = (globalIndex < currentBadgeColors.count) ? currentBadgeColors[globalIndex].map { ImageUtils.colorFromARGB($0.intValue) } : nil
       badgeView.backgroundColor = rawColor ?? bar.tintColor ?? .systemRed
       badgeView.layer.masksToBounds = true
       badgeView.layer.borderWidth = 0
       bar.clipsToBounds = false
       let anchor = iconAnchor(forSlot: localIndex, in: bar, count: count)
 
-      if wantsDotOnly {
-        let size: CGFloat = 10.0
-        badgeView.layer.cornerRadius = size / 2
-        badgeView.subviews.forEach { $0.removeFromSuperview() }
-        if badgeView.superview == nil { bar.addSubview(badgeView) }
-        bar.bringSubviewToFront(badgeView)
-        badgeView.frame = CGRect(x: anchor.maxX - size / 2, y: anchor.minY - size / 2 + 4, width: size, height: size)
-      } else if hasText, let text = badge {
+      if hasText, let text = badge {
         let label: UILabel = (badgeView.subviews.compactMap { $0 as? UILabel }.first) ?? UILabel(frame: .zero)
         if label.superview == nil { badgeView.addSubview(label) }
         label.text = text
@@ -508,6 +526,7 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
       // Remove shadow to prevent shadow appearing over modals/bottom sheets
       ap.shadowColor = .clear
       ap.shadowImage = UIImage()
+      Self.useDotBadgeFont(in: ap)
       return ap
     }
     return nil
@@ -896,6 +915,7 @@ class CupertinoTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelega
               ap.configureWithTransparentBackground()
               ap.shadowColor = .clear
               ap.shadowImage = UIImage()
+              Self.useDotBadgeFont(in: ap)
               return ap
             }
             return nil
