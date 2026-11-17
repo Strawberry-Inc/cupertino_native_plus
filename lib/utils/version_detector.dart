@@ -119,11 +119,17 @@ class PlatformVersion {
     return (_cachedMacOSVersion ?? 0) >= 26;
   }
 
+  /// Overrides [shouldUseNativeGlass] in tests. When null, the OS version
+  /// decides.
+  @visibleForTesting
+  static bool? debugShouldUseNativeGlassOverride;
+
   /// Returns true if native Liquid Glass effects should be used.
   ///
   /// This is true only on iOS 26+ or macOS 26+.
   /// Auto-initializes on first access.
-  static bool get shouldUseNativeGlass => isIOS26OrLater || isMacOS26OrLater;
+  static bool get shouldUseNativeGlass =>
+      debugShouldUseNativeGlassOverride ?? (isIOS26OrLater || isMacOS26OrLater);
 
   /// Alias for [shouldUseNativeGlass].
   static bool get supportsLiquidGlass => shouldUseNativeGlass;
