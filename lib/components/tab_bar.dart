@@ -238,6 +238,11 @@ class _CNTabBarState extends State<CNTabBar> {
   Map<String, dynamic>? _lastLabelStyle;
   Map<String, dynamic>? _lastActiveLabelStyle;
 
+  /// Whether [_lastLabelStyle] / [_lastActiveLabelStyle] were sent to the
+  /// current view (they can be null both when unknown and when sent as null).
+  bool _labelStyleSent = false;
+  bool _activeLabelStyleSent = false;
+
   /// Cached future that resolves to creation params. Reused across rebuilds to
   /// avoid jank. When resolved, we build the platform view in build() so
   /// _intrinsicHeight is used once the native view reports it.
@@ -615,8 +620,12 @@ class _CNTabBarState extends State<CNTabBar> {
     _lastRightCount = widget.rightCount;
     _lastSplitSpacing = widget.splitSpacing;
     _lastSplitRightAsButton = widget.splitRightAsButton;
-    _lastLabelStyle = encodeTextStyle(widget.labelStyle, context);
-    _lastActiveLabelStyle = encodeTextStyle(widget.activeLabelStyle, context);
+    // The view may have been created with older label styles than the
+    // widget's (they can change before it's created), so the sync below
+    // sends the current ones once, also when they are null.
+    _labelStyleSent = false;
+    _activeLabelStyleSent = false;
+    _syncPropsToNativeIfNeeded();
 
     // Force refresh for label rendering on iOS < 16
     // Wait for next frame to ensure view is fully initialized
@@ -858,6 +867,9 @@ class _CNTabBarState extends State<CNTabBar> {
         _lastRightCount = widget.rightCount;
         _lastSplitSpacing = widget.splitSpacing;
         _lastSplitRightAsButton = widget.splitRightAsButton;
+        // The new bars have no label styles: send them again below.
+        _labelStyleSent = false;
+        _activeLabelStyleSent = false;
         _requestIntrinsicSize();
         // setLayout recreates the tab bars — trigger refresh to force label
         // rendering (same cycle-through-items trick used after initial creation).
@@ -883,19 +895,27 @@ class _CNTabBarState extends State<CNTabBar> {
         _lastSplitRightAsButton = widget.splitRightAsButton;
       }
 
-      // Label style sync
+      // Label style sync. Compare the contents (the maps are made anew on
+      // every build). Read each style just before comparing, and record it
+      // before sending: another sync may run while this one awaits, and must
+      // compare against what was sent last.
+      if (!mounted) return;
       final labelStyleEncoded = encodeTextStyle(widget.labelStyle, context);
+      if (!_labelStyleSent || !mapEquals(_lastLabelStyle, labelStyleEncoded)) {
+        _labelStyleSent = true;
+        _lastLabelStyle = labelStyleEncoded;
+        await ch.invokeMethod('setLabelStyle', labelStyleEncoded);
+      }
+      if (!mounted) return;
       final activeLabelStyleEncoded = encodeTextStyle(
         widget.activeLabelStyle,
         context,
       );
-      if (_lastLabelStyle != labelStyleEncoded) {
-        await ch.invokeMethod('setLabelStyle', labelStyleEncoded);
-        _lastLabelStyle = labelStyleEncoded;
-      }
-      if (_lastActiveLabelStyle != activeLabelStyleEncoded) {
-        await ch.invokeMethod('setActiveLabelStyle', activeLabelStyleEncoded);
+      if (!_activeLabelStyleSent ||
+          !mapEquals(_lastActiveLabelStyle, activeLabelStyleEncoded)) {
+        _activeLabelStyleSent = true;
         _lastActiveLabelStyle = activeLabelStyleEncoded;
+        await ch.invokeMethod('setActiveLabelStyle', activeLabelStyleEncoded);
       }
     } catch (e) {
       // Ignore MissingPluginException during hot reload or view recreation
