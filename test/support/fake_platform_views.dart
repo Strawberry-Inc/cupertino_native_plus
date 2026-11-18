@@ -34,6 +34,12 @@ class FakePlatformViews {
   /// While set, replies on the views' channels wait for it.
   Completer<void>? replying;
 
+  /// While set for a method, replies to that method wait for it.
+  final Map<String, Completer<void>> replyingTo = {};
+
+  /// Methods whose calls answer with an error.
+  final Set<String> failingMethods = {};
+
   /// Whether the views' channels answer with an error.
   bool failing = false;
 
@@ -53,7 +59,10 @@ class FakePlatformViews {
     _messenger.setMockMethodCallHandler(channel(id), (call) async {
       calls[id]!.add(call);
       await replying?.future;
-      if (failing) throw PlatformException(code: 'failed');
+      await replyingTo[call.method]?.future;
+      if (failing || failingMethods.contains(call.method)) {
+        throw PlatformException(code: 'failed');
+      }
       return null;
     });
     await creating?.future;

@@ -17,6 +17,15 @@ final class CupertinoButtonViewModel: ObservableObject {
   @Published var config: GlassButtonConfig
   @Published var imagePlacement: String
   @Published var contentAlignment: String
+  /// Set by Flutter while the button is pressed, when [delayedPress] is on.
+  @Published var isPressed: Bool = false
+  /// The native glass does not react to touches; Flutter sets [isPressed].
+  let delayedPress: Bool
+  /// Extra room around the button in which the press swell is drawn.
+  let pressOverflow: CGFloat
+
+  /// How much a pressed button grows when [delayedPress] is on.
+  static let pressedScale: CGFloat = 1.08
 
   init(
     title: String?,
@@ -29,7 +38,9 @@ final class CupertinoButtonViewModel: ObservableObject {
     glassEffectInteractive: Bool,
     config: GlassButtonConfig,
     imagePlacement: String,
-    contentAlignment: String = "center"
+    contentAlignment: String = "center",
+    delayedPress: Bool = false,
+    pressOverflow: CGFloat = 0
   ) {
     self.title = title
     self.iconConfig = iconConfig
@@ -42,6 +53,8 @@ final class CupertinoButtonViewModel: ObservableObject {
     self.config = config
     self.imagePlacement = imagePlacement
     self.contentAlignment = contentAlignment
+    self.delayedPress = delayedPress
+    self.pressOverflow = pressOverflow
   }
 }
 
@@ -98,6 +111,8 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
     var glassEffectUnionId: String? = nil
     var glassEffectId: String? = nil
     var glassEffectInteractive: Bool = false
+    var delayedPress: Bool = false
+    var pressOverflow: CGFloat = 0
     var swiftUIWidth: CGFloat? = nil
     var swiftUIExpandWidth: Bool = false
 
@@ -152,6 +167,10 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
       if let geId = dict["glassEffectId"] as? String { glassEffectId = geId }
       if let geInteractive = dict["glassEffectInteractive"] as? NSNumber {
         glassEffectInteractive = geInteractive.boolValue
+      }
+      if let dp = dict["delayedPress"] as? NSNumber { delayedPress = dp.boolValue }
+      if let po = dict["pressOverflow"] as? NSNumber {
+        pressOverflow = max(0, CGFloat(truncating: po))
       }
 
       // Build icon args dict: pre-convert FlutterStandardTypedData → Data.
@@ -311,7 +330,9 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
         imagePlacement: imagePlacement,
         contentAlignment: contentAlignment,
         width: swiftUIWidth,
-        expandWidth: swiftUIExpandWidth
+        expandWidth: swiftUIExpandWidth,
+        delayedPress: delayedPress,
+        pressOverflow: pressOverflow
       )
     } else {
       // Use UIKit button for standard implementation
@@ -416,8 +437,9 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
                 let sz = hc.sizeThatFits(in: proposed)
                 vm.config = original
                 let validWidth = sz.width > 0 && sz.width < proposed.width * 0.9
-                let w = validWidth ? Double(ceil(sz.width)) : 80.0
-                let h = sz.height > 0 ? Double(ceil(sz.height)) : 44.0
+                let inset = vm.pressOverflow * 2
+                let w = validWidth ? Double(ceil(sz.width - inset)) : 80.0
+                let h = sz.height > 0 ? Double(ceil(sz.height - inset)) : 44.0
                 result(["width": w, "height": h])
                 return
               }
@@ -426,9 +448,14 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
               let proposed = CGSize(
                 width: UIScreen.main.bounds.width * 2, height: UIScreen.main.bounds.height)
               let sz = hc.sizeThatFits(in: proposed)
+              // The press room is drawn around the button, not part of its size.
+              var inset: CGFloat = 0
+              if #available(iOS 26.0, *), let vm = self.buttonViewModel {
+                inset = vm.pressOverflow * 2
+              }
               let validWidth = sz.width > 0 && sz.width < proposed.width * 0.9
-              let w = validWidth ? Double(ceil(sz.width)) : 80.0
-              let h = sz.height > 0 ? Double(ceil(sz.height)) : 44.0
+              let w = validWidth ? Double(ceil(sz.width - inset)) : 80.0
+              let h = sz.height > 0 ? Double(ceil(sz.height - inset)) : 44.0
               result(["width": w, "height": h])
             } else {
               result(["width": 80.0, "height": 44.0])
@@ -502,12 +529,36 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
         if let args = call.arguments as? [String: Any], let p = args["pressed"] as? NSNumber {
           if !usesSwiftUI, let button = self.button {
             button.isHighlighted = p.boolValue
+          } else if #available(iOS 26.0, *), let vm = self.buttonViewModel, vm.delayedPress {
+            // With delayedPress the glass does not react to touches itself.
+            // A disabled button never swells.
+            vm.isPressed = p.boolValue && vm.isEnabled
           }
-          // For SwiftUI buttons, pressed state is handled by the view itself
+          // Otherwise the SwiftUI glass handles the pressed state by itself.
           result(nil)
         } else {
           result(FlutterError(code: "bad_args", message: "Missing pressed", details: nil))
         }
+      case "setButtonWidth":
+        // The width given in creation params can change later (for example when
+        // a tab's label grows); without this the glass keeps the old width.
+        let args = call.arguments as? [String: Any]
+        let width = (args?["width"] as? NSNumber).map { CGFloat(truncating: $0) }
+        let expandWidth = (args?["expandWidth"] as? NSNumber)?.boolValue
+        if usesSwiftUI, #available(iOS 26.0, *), let vm = self.buttonViewModel {
+          let old = vm.config
+          vm.config = GlassButtonConfig(
+            borderRadius: old.borderRadius,
+            padding: old.padding,
+            minHeight: old.minHeight,
+            spacing: old.spacing,
+            width: width,
+            // Without a fixed width the glass may need to fill the space again.
+            expandWidth: expandWidth ?? old.expandWidth,
+            contentAlignment: old.contentAlignment
+          )
+        }
+        result(nil)
       case "setButtonTitle":
         if let args = call.arguments as? [String: Any], let t = args["title"] as? String {
           if usesSwiftUI {
@@ -901,7 +952,9 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
     imagePlacement: String,
     contentAlignment: String,
     width: CGFloat?,
-    expandWidth: Bool
+    expandWidth: Bool,
+    delayedPress: Bool,
+    pressOverflow: CGFloat
   ) {
     let config = GlassButtonConfig(
       borderRadius: borderRadius,
@@ -931,7 +984,9 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
       glassEffectInteractive: glassEffectInteractive,
       config: config,
       imagePlacement: imagePlacement,
-      contentAlignment: contentAlignment
+      contentAlignment: contentAlignment,
+      delayedPress: delayedPress,
+      pressOverflow: pressOverflow
     )
     self._buttonViewModel = viewModel
 
@@ -950,12 +1005,17 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
           onPressed: onPressed,
           glassEffectUnionId: viewModel.glassEffectUnionId,
           glassEffectId: viewModel.glassEffectId,
-          glassEffectInteractive: viewModel.glassEffectInteractive,
+          // With delayedPress the glass must not swell by itself when a
+          // scroll starts on it; Flutter tells it when it is pressed instead.
+          glassEffectInteractive: viewModel.glassEffectInteractive && !viewModel.delayedPress,
           namespace: namespace,
           config: viewModel.config,
           imagePlacement: viewModel.imagePlacement,
           contentAlignment: viewModel.contentAlignment
         )
+        .scaleEffect(viewModel.isPressed ? CupertinoButtonViewModel.pressedScale : 1)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: viewModel.isPressed)
+        .padding(viewModel.pressOverflow)
       }
     }
 

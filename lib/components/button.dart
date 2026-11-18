@@ -43,7 +43,11 @@ class CNButtonConfig extends Equatable {
   /// Visual style to apply.
   final CNButtonStyle style;
 
-  /// Fixed width used in icon/round mode.
+  /// Fixed width of the button.
+  ///
+  /// Icon/round buttons use it as their size. Label buttons use it right away
+  /// for both the layout and the native glass, instead of waiting for the
+  /// native view to report its size; later changes are sent to the native view.
   final double? width;
 
   /// If true, sizes the control to its intrinsic width.
@@ -91,6 +95,27 @@ class CNButtonConfig extends Equatable {
   /// Defaults to null, which behaves as [MainAxisAlignment.center].
   final MainAxisAlignment? contentAlignment;
 
+  /// Whether the press swell waits until the touch is clearly a press.
+  ///
+  /// The native interactive glass swells as soon as a finger touches it, even
+  /// when the touch turns into a scroll of an enclosing [Scrollable] (for
+  /// example a row of tabs). When true, the native glass does not react to
+  /// touches by itself. Instead the button swells after the finger rests for
+  /// [kPressTimeout] without moving, or briefly when it is released sooner, the
+  /// way iOS buttons inside a scroll view behave. A touch that moves more than
+  /// [kTouchSlop] never swells the button.
+  ///
+  /// Read once when the native view is created. Only applies on iOS 26+ when
+  /// using glass styles.
+  final bool delayedPress;
+
+  /// Extra room on every side of the button in which the press swell is drawn.
+  ///
+  /// The native view is made this much larger on every side, so the swollen
+  /// glass is not clipped. The button's layout size and hit area stay the same.
+  /// Read once when the native view is created. Only applies on iOS 26+.
+  final double pressOverflow;
+
   /// Creates a configuration for [CNButton].
   const CNButtonConfig({
     this.padding,
@@ -106,6 +131,8 @@ class CNButtonConfig extends Equatable {
     this.glassEffectInteractive = true,
     this.maxLines = 1,
     this.contentAlignment,
+    this.delayedPress = false,
+    this.pressOverflow = 0,
   });
 
   @override
@@ -123,6 +150,8 @@ class CNButtonConfig extends Equatable {
     glassEffectInteractive,
     maxLines,
     contentAlignment,
+    delayedPress,
+    pressOverflow,
   ];
 }
 
@@ -209,11 +238,33 @@ class _CNButtonState extends State<CNButton> {
   CNImagePlacement? _lastImagePlacement;
   double? _lastImagePadding;
   EdgeInsets? _lastPadding;
+  double? _lastWidth;
+
+  /// The width in the creation params the native view was made with.
+  double? _createdWidth;
+  bool _hasCreatedWidth = false;
+
+  /// Whether the native view's width is unknown because sending it failed.
+  bool _widthUnknown = false;
   Map<String, dynamic>? _lastIconMap;
   CNButtonTheme? _lastTheme;
   TextStyle? _lastLabelStyle;
   Offset? _downPosition;
   bool _pressed = false;
+
+  /// The pointer whose press is being shown; other fingers are ignored.
+  int? _pointer;
+
+  /// With [CNButtonConfig.delayedPress]: shows the press once the finger has
+  /// rested long enough.
+  Timer? _pressTimer;
+
+  /// With [CNButtonConfig.delayedPress]: ends the short press shown for a quick
+  /// tap.
+  Timer? _releaseTimer;
+
+  /// How long a quick tap shows the press with [CNButtonConfig.delayedPress].
+  static const Duration _tapPressDuration = Duration(milliseconds: 150);
   Future<String>? _assetPathFuture;
   String? _lastAssetPath;
 
@@ -223,6 +274,8 @@ class _CNButtonState extends State<CNButton> {
 
   @override
   void dispose() {
+    _pressTimer?.cancel();
+    _releaseTimer?.cancel();
     _channel?.setMethodCallHandler(null);
     super.dispose();
   }
@@ -230,8 +283,25 @@ class _CNButtonState extends State<CNButton> {
   @override
   void didUpdateWidget(covariant CNButton oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.config.delayedPress && !_isPressable) {
+      // Disabled while being pressed: drop the press.
+      _pressTimer?.cancel();
+      _pressTimer = null;
+      _releaseTimer?.cancel();
+      _releaseTimer = null;
+      _setPressed(false);
+    }
     _syncPropsToNativeIfNeeded();
   }
+
+  /// Whether a press can do anything.
+  bool get _isPressable => widget.enabled && widget.onPressed != null;
+
+  /// Whether the native glass fills the available width.
+  bool get _expandsWidth =>
+      !(widget.isIcon && widget.label == null) &&
+      !widget.config.shrinkWrap &&
+      widget.config.width == null;
 
   @override
   void didChangeDependencies() {
@@ -282,6 +352,11 @@ class _CNButtonState extends State<CNButton> {
 
   Widget _buildNativeButton(BuildContext context, {String? resolvedAssetPath}) {
     const viewType = ViewTypes.cupertinoNativeButton;
+    // The native view is made with the params of the first build only.
+    if (!_hasCreatedWidth) {
+      _hasCreatedWidth = true;
+      _createdWidth = widget.config.width;
+    }
 
     final iconMap = widget.icon?.toMap() ?? {};
     final iconWidth = (iconMap['iconWidth'] as double?) ?? 20.0;
@@ -348,16 +423,15 @@ class _CNButtonState extends State<CNButton> {
         'borderRadius': widget.config.borderRadius,
       if (widget.config.minHeight != null) 'minHeight': widget.config.minHeight,
       if (widget.config.width != null) 'buttonWidth': widget.config.width,
-      'buttonExpandWidth':
-          !(widget.isIcon && widget.label == null) &&
-          !widget.config.shrinkWrap &&
-          widget.config.width == null,
+      'buttonExpandWidth': _expandsWidth,
       'glassMaterial': widget.theme.glassMaterial.name,
       if (widget.config.glassEffectUnionId != null)
         'glassEffectUnionId': widget.config.glassEffectUnionId,
       if (widget.config.glassEffectId != null)
         'glassEffectId': widget.config.glassEffectId,
       'glassEffectInteractive': widget.config.glassEffectInteractive,
+      'delayedPress': widget.config.delayedPress,
+      'pressOverflow': widget.config.pressOverflow,
       // CNButtonTheme colors
       if (resolveColorToArgb(widget.theme.labelColor, context) != null)
         'labelColor': resolveColorToArgb(widget.theme.labelColor, context),
@@ -411,6 +485,10 @@ class _CNButtonState extends State<CNButton> {
         double? width;
         if (isIconButton) {
           width = widget.config.width ?? calculatedSize ?? defaultHeight;
+        } else if (widget.config.width != null) {
+          // A fixed width: use it right away instead of a guess until the
+          // native view reports its size, so the layout does not jump.
+          width = widget.config.width;
         } else if (preferIntrinsic) {
           width = _intrinsicWidth ?? (widget.isIcon ? 160.0 : 80.0);
         }
@@ -426,29 +504,41 @@ class _CNButtonState extends State<CNButton> {
             ? _intrinsicHeight!
             : defaultHeight;
 
-        return Listener(
-          onPointerDown: (e) {
-            _downPosition = e.position;
-            _setPressed(true);
-          },
-          onPointerMove: (e) {
-            final start = _downPosition;
-            if (start != null && _pressed) {
-              final moved = (e.position - start).distance;
-              if (moved > kTouchSlop) _setPressed(false);
-            }
-          },
-          onPointerUp: (_) {
-            _setPressed(false);
-            _downPosition = null;
-          },
-          onPointerCancel: (_) {
-            _setPressed(false);
-            _downPosition = null;
-          },
-          child: ClipRect(
+        // Only the iOS view draws the swell inside the extra room.
+        final overflow = defaultTargetPlatform == TargetPlatform.iOS
+            ? widget.config.pressOverflow
+            : 0.0;
+        final overflowWidth =
+            width ?? (hasBoundedWidth ? constraints.maxWidth : null);
+        final Widget button;
+        if (overflow > 0 && overflowWidth != null) {
+          // Size the button as the parent allows, then let the native view
+          // draw the swell around exactly that size, without changing the
+          // button's size or hit area.
+          final buttonWidth = constraints.constrainWidth(overflowWidth);
+          final buttonHeight = constraints.constrainHeight(height);
+          button = SizedBox(
+            height: buttonHeight,
+            width: buttonWidth,
+            child: OverflowBox(
+              minWidth: buttonWidth + overflow * 2,
+              maxWidth: buttonWidth + overflow * 2,
+              minHeight: buttonHeight + overflow * 2,
+              maxHeight: buttonHeight + overflow * 2,
+              child: platformView,
+            ),
+          );
+        } else {
+          button = ClipRect(
             child: SizedBox(height: height, width: width, child: platformView),
-          ),
+          );
+        }
+        return Listener(
+          onPointerDown: _onPointerDown,
+          onPointerMove: _onPointerMove,
+          onPointerUp: (event) => _onPointerEnd(event, released: true),
+          onPointerCancel: (event) => _onPointerEnd(event, released: false),
+          child: button,
         );
       },
     );
@@ -467,10 +557,16 @@ class _CNButtonState extends State<CNButton> {
     _lastImagePlacement = widget.config.imagePlacement;
     _lastImagePadding = widget.config.imagePadding;
     _lastPadding = widget.config.padding;
+    // The view has the width it was created with, which may be older than
+    // the current one; the difference is sent below.
+    _lastWidth = _createdWidth;
     _lastIconMap = widget.icon?.toMap();
     _lastTheme = widget.theme;
     scheduleMicrotask(() {
-      if (mounted && _channel != null) _requestIntrinsicSize();
+      if (mounted && _channel != null) {
+        _requestIntrinsicSize();
+        unawaited(_syncWidthIfNeeded(ch));
+      }
     });
   }
 
@@ -554,6 +650,7 @@ class _CNButtonState extends State<CNButton> {
       _lastImagePadding = widget.config.imagePadding;
       _requestIntrinsicSize();
     }
+    await _syncWidthIfNeeded(ch);
     if (_lastPadding != widget.config.padding) {
       _requestIntrinsicSize();
       _lastPadding = widget.config.padding;
@@ -659,6 +756,82 @@ class _CNButtonState extends State<CNButton> {
       await ch.invokeMethod('setStyle', <String, dynamic>{'tint': tint});
       _lastTint = tint;
     }
+  }
+
+  /// Sends the width if it changed since it was last sent.
+  ///
+  /// The width is read when the view is created; later changes (for example a
+  /// label that grows) must be sent, or the native glass keeps the old width
+  /// and truncates the label. Only the iOS view can change it.
+  Future<void> _syncWidthIfNeeded(MethodChannel ch) async {
+    final width = widget.config.width;
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    if (!_widthUnknown && _lastWidth == width) return;
+    // Record it before awaiting so a change back while this call is in
+    // flight is still sent.
+    _lastWidth = width;
+    _widthUnknown = false;
+    try {
+      await ch.invokeMethod('setButtonWidth', {
+        'width': width,
+        'expandWidth': _expandsWidth,
+      });
+    } catch (_) {
+      // The native width is unknown (null is a real width, so it can't mark
+      // this); send it again at the next sync.
+      _widthUnknown = true;
+      return;
+    }
+    _requestIntrinsicSize();
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (_pointer != null) return;
+    _pointer = event.pointer;
+    _downPosition = event.position;
+    _releaseTimer?.cancel();
+    if (!widget.config.delayedPress) {
+      _setPressed(true);
+      return;
+    }
+    if (!_isPressable) return;
+    _pressTimer?.cancel();
+    _pressTimer = Timer(kPressTimeout, () {
+      _pressTimer = null;
+      _setPressed(true);
+    });
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer) return;
+    final start = _downPosition;
+    if (start == null) return;
+    if ((event.position - start).distance <= kTouchSlop) return;
+    // The touch became a drag (for example a scroll that started on the
+    // button): the button is not being pressed.
+    _pressTimer?.cancel();
+    _pressTimer = null;
+    _downPosition = null;
+    _setPressed(false);
+  }
+
+  void _onPointerEnd(PointerEvent event, {required bool released}) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    final pending = _pressTimer;
+    _pressTimer = null;
+    final wasTouching = _downPosition != null;
+    _downPosition = null;
+    if (pending != null && pending.isActive) {
+      pending.cancel();
+      if (released && wasTouching) {
+        // A quick tap: show the press briefly so the tap is still felt.
+        _setPressed(true);
+        _releaseTimer = Timer(_tapPressDuration, () => _setPressed(false));
+        return;
+      }
+    }
+    _setPressed(false);
   }
 
   Future<void> _setPressed(bool pressed) async {
