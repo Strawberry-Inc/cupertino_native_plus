@@ -59,6 +59,17 @@ Object? _nativeStyle(
   return sent.isEmpty ? views.created[id]![param] : sent.last;
 }
 
+/// The index the native bar has: the last one sent with setSelectedIndex, or
+/// the one it was created with.
+Object? _nativeIndex(FakePlatformViews views, int id) {
+  final sent = [
+    for (final call in views.calls[id]!)
+      if (call.method == 'setSelectedIndex')
+        (call.arguments as Map<Object?, Object?>)['index'],
+  ];
+  return sent.isEmpty ? views.created[id]!['selectedIndex'] : sent.last;
+}
+
 const _regular = TextStyle(fontSize: 10);
 const _bold = TextStyle(fontSize: 10, fontWeight: FontWeight.bold);
 const _regularSent = {'fontSize': 10.0};
@@ -66,6 +77,10 @@ const _boldSent = {'fontSize': 10.0, 'fontWeight': 700};
 
 void main() {
   final iOS = TargetPlatformVariant.only(TargetPlatform.iOS);
+  final iOSAndMacOS = TargetPlatformVariant({
+    TargetPlatform.iOS,
+    TargetPlatform.macOS,
+  });
 
   setUp(() => PlatformVersion.debugShouldUseNativeGlassOverride = true);
   tearDown(() => PlatformVersion.debugShouldUseNativeGlassOverride = null);
@@ -164,6 +179,26 @@ void main() {
         _boldSent,
       );
     }, variant: iOS);
+
+    testWidgets('ビューができる前に変わったタブの選択を、できた後すぐに送る', (tester) async {
+      final views = FakePlatformViews(tester)..creating = Completer<void>();
+      await tester.pumpWidget(_tabBar(currentIndex: 0));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      final id = views.onlyId;
+      expect(views.created[id]!['selectedIndex'], 0);
+
+      await tester.pumpWidget(_tabBar(currentIndex: 1));
+      await tester.pump();
+      views.creating!.complete();
+      await tester.pump();
+
+      // Not only after the label refresh 50 ms later (iOS): until then the
+      // bar shows the tab it was created with. macOS has no refresh at all.
+      expect(_nativeIndex(views, id), 1);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(_nativeIndex(views, id), 1);
+    }, variant: iOSAndMacOS);
 
     testWidgets('選んだタブの書式だけを送っている途中に元へ戻しても、最後の書式にする', (tester) async {
       final views = FakePlatformViews(tester);

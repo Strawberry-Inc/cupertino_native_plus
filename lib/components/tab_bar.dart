@@ -610,7 +610,10 @@ class _CNTabBarState extends State<CNTabBar> {
     final ch = ViewTypes.methodChannelFor(ViewTypes.cupertinoNativeTabBar, id);
     _channel = ch;
     ch.setMethodCallHandler(_onMethodCall);
-    _lastIndex = widget.currentIndex;
+    // The view was created with the index from its creation params, which
+    // can be older than the widget's (it can change before the view is
+    // created). Leave it unknown so the sync below sends the current one.
+    _lastIndex = null;
     _lastTint = resolveColorToArgb(_effectiveTint, context);
     _lastBg = resolveColorToArgb(widget.backgroundColor, context);
     _lastIsDark = _isDark;
