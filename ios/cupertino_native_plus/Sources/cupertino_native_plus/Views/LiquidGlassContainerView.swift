@@ -59,6 +59,12 @@ class LiquidGlassContainerPlatformView: NSObject, FlutterPlatformView {
     let glassView = LiquidGlassContainerSwiftUI(viewModel: viewModel)
     self.hostingController = UIHostingController(rootView: glassView)
     self.hostingController.view.backgroundColor = .clear
+    self.hostingController.view.insetsLayoutMarginsFromSafeArea = false
+    self.hostingController.additionalSafeAreaInsets = .zero
+    // Flutter places and sizes this platform view, so the window's safe area
+    // must not inset the glass inside it. Otherwise a container that reaches
+    // into the home indicator area leaves its bottom part without glass.
+    self.hostingController.safeAreaRegions = []
     self.hostingController.overrideUserInterfaceStyle = config.isDark ? .dark : .light
 
     super.init()
@@ -114,6 +120,7 @@ struct LiquidGlassContainerSwiftUI: View {
         .frame(width: geometry.size.width, height: geometry.size.height)
         .animation(.easeInOut(duration: 0.25), value: configIdentity)
     }
+    .ignoresSafeArea()
   }
 
   /// Single Equatable value for animation to avoid multiple animation pipelines (reduces jank).
