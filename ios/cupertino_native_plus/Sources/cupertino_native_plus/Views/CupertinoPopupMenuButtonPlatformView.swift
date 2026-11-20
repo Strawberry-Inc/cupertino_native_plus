@@ -16,6 +16,7 @@ class CupertinoPopupMenuButtonPlatformView: NSObject, FlutterPlatformView {
   private var imageAssetFormats: [String] = []
   private var dividers: [Bool] = []
   private var enabled: [Bool] = []
+  private var checked: [Bool] = []
   private var itemSizes: [Any] = []
   private var itemColors: [Any] = []
   private var itemModes: [String?] = []
@@ -90,6 +91,7 @@ class CupertinoPopupMenuButtonPlatformView: NSObject, FlutterPlatformView {
       imageAssetFormats = (dict["imageAssetFormats"] as? [String]) ?? []
       dividers = (dict["isDivider"] as? [NSNumber]) ?? []
       enabled = (dict["enabled"] as? [NSNumber]) ?? []
+      self.checked = ((dict["checked"] as? [NSNumber]) ?? []).map { $0.boolValue }
       sizes = (dict["sfSymbolSizes"] as? [Any]) ?? []
       colors = (dict["sfSymbolColors"] as? [Any]) ?? []
       if let modes = dict["sfSymbolRenderingModes"] as? [String?] { self.itemModes = modes }
@@ -144,6 +146,9 @@ class CupertinoPopupMenuButtonPlatformView: NSObject, FlutterPlatformView {
     if !buttonIconPalette.isEmpty { self.btnIconPalette = buttonIconPalette.map { ImageUtils.colorFromARGB($0.intValue) } }
     // Apply content initially
     setButtonContent(title: title, image: makeButtonIconImage(), iconOnly: (title == nil))
+    if let label = (args as? [String: Any])?["accessibilityLabel"] as? String {
+      button.accessibilityLabel = label
+    }
     // Apply label text style from creation params if provided
     if let ls = (args as? [String: Any])?["labelStyle"] as? [String: Any], let t = title, !t.isEmpty {
       let lsFontSize = (ls["fontSize"] as? NSNumber).map { CGFloat(truncating: $0) }
@@ -228,6 +233,7 @@ class CupertinoPopupMenuButtonPlatformView: NSObject, FlutterPlatformView {
           self.symbols = (args["sfSymbols"] as? [String]) ?? []
           self.dividers = ((args["isDivider"] as? [NSNumber]) ?? []).map { $0.boolValue }
           self.enabled = ((args["enabled"] as? [NSNumber]) ?? []).map { $0.boolValue }
+          self.checked = ((args["checked"] as? [NSNumber]) ?? []).map { $0.boolValue }
           let sizes = (args["sfSymbolSizes"] as? [NSNumber]) ?? []
           let colors = (args["sfSymbolColors"] as? [NSNumber]) ?? []
           self.itemSizes = sizes
@@ -314,6 +320,11 @@ class CupertinoPopupMenuButtonPlatformView: NSObject, FlutterPlatformView {
           }
           result(nil)
         }
+      case "setAccessibilityLabel":
+        // nil label restores the native default
+        let args = call.arguments as? [String: Any]
+        self.button.accessibilityLabel = args?["label"] as? String
+        result(nil)
       case "setButtonTitle":
         if let args = call.arguments as? [String: Any], let t = args["title"] as? String {
           self.button.setTitle(t, for: .normal)
@@ -550,6 +561,8 @@ class CupertinoPopupMenuButtonPlatformView: NSObject, FlutterPlatformView {
         let action = UIAction(title: title, image: image, attributes: isEnabled ? [] : [.disabled]) { [weak self] _ in
           self?.channel.invokeMethod("itemSelected", arguments: ["index": i])
         }
+        // A checkmark marks the selected one of a choice
+        if i < checked.count && checked[i] { action.state = .on }
         current.append(action)
       }
     flushGroup()

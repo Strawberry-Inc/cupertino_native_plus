@@ -9,6 +9,7 @@ class CupertinoPopupMenuButtonNSView: NSView {
   private var symbols: [String] = []
   private var dividers: [Bool] = []
   private var enabled: [Bool] = []
+  private var checked: [Bool] = []
   private var defaultSizes: [NSNumber] = []
   private var defaultColors: [NSNumber] = []
   private var defaultModes: [String?] = []
@@ -50,6 +51,8 @@ class CupertinoPopupMenuButtonNSView: NSView {
       symbols = (dict["sfSymbols"] as? [String]) ?? []
       dividers = (dict["isDivider"] as? [NSNumber]) ?? []
       enabled = (dict["enabled"] as? [NSNumber]) ?? []
+      self.checked = ((dict["checked"] as? [NSNumber]) ?? []).map { $0.boolValue }
+      if let label = dict["accessibilityLabel"] as? String { button.setAccessibilityLabel(label) }
       if let modes = dict["sfSymbolRenderingModes"] as? [String?] { self.defaultModes = modes }
       if let palettes = dict["sfSymbolPaletteColors"] as? [[NSNumber]] { self.defaultPalettes = palettes }
       if let gradients = dict["sfSymbolGradientEnabled"] as? [NSNumber?] { self.defaultGradients = gradients }
@@ -181,6 +184,7 @@ class CupertinoPopupMenuButtonNSView: NSView {
           self.symbols = (args["sfSymbols"] as? [String]) ?? []
           self.dividers = ((args["isDivider"] as? [NSNumber]) ?? []).map { $0.boolValue }
           self.enabled = ((args["enabled"] as? [NSNumber]) ?? []).map { $0.boolValue }
+          self.checked = ((args["checked"] as? [NSNumber]) ?? []).map { $0.boolValue }
           self.defaultSizes = (args["sfSymbolSizes"] as? [NSNumber]) ?? []
           self.defaultColors = (args["sfSymbolColors"] as? [NSNumber]) ?? []
           self.defaultModes = (args["sfSymbolRenderingModes"] as? [String?]) ?? []
@@ -296,6 +300,11 @@ class CupertinoPopupMenuButtonNSView: NSView {
           self.button.attributedTitle = NSAttributedString(string: self.button.title)
           result(nil)
         }
+      case "setAccessibilityLabel":
+        // nil label restores the native default
+        let args = call.arguments as? [String: Any]
+        self.button.setAccessibilityLabel(args?["label"] as? String)
+        result(nil)
       case "setButtonTitle":
         if let args = call.arguments as? [String: Any], let t = args["title"] as? String {
           self.button.title = t
@@ -332,6 +341,8 @@ class CupertinoPopupMenuButtonNSView: NSView {
       mi.target = self
       mi.tag = i
       if i < enabled.count { mi.isEnabled = enabled[i] }
+      // A checkmark marks the selected one of a choice
+      if i < checked.count, checked[i] { mi.state = .on }
       if i < symbols.count, !symbols[i].isEmpty {
         if var img = NSImage(systemSymbolName: symbols[i], accessibilityDescription: nil) {
           if #available(macOS 12.0, *), let sizes = defaultSizes, i < sizes.count {

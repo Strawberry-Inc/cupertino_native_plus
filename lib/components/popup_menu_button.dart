@@ -30,6 +30,7 @@ class CNPopupMenuItem extends CNPopupMenuEntry {
     this.imageAsset,
     this.iconColor,
     this.enabled = true,
+    this.checked = false,
   });
 
   /// Display label for the item.
@@ -54,6 +55,10 @@ class CNPopupMenuItem extends CNPopupMenuEntry {
   /// Whether the item can be selected.
   final bool enabled;
 
+  /// Whether the item shows a checkmark, as the selected one of a choice
+  /// (`UIMenuElement.State.on` on iOS, `NSControl.StateValue.on` on macOS).
+  final bool checked;
+
   @override
   List<Object?> get props => [
     label,
@@ -62,6 +67,7 @@ class CNPopupMenuItem extends CNPopupMenuEntry {
     imageAsset,
     iconColor,
     enabled,
+    checked,
   ];
 }
 
@@ -92,6 +98,7 @@ class CNPopupMenuButton extends StatefulWidget {
     this.buttonStyle = CNButtonStyle.plain,
     this.preserveTopToBottomOrder = false,
     this.labelStyle,
+    this.accessibilityLabel,
   }) : buttonIcon = null,
        buttonCustomIcon = null,
        buttonImageAsset = null,
@@ -110,6 +117,7 @@ class CNPopupMenuButton extends StatefulWidget {
     double size = 44.0, // button diameter (width = height)
     this.buttonStyle = CNButtonStyle.glass,
     this.preserveTopToBottomOrder = false,
+    this.accessibilityLabel,
   }) : buttonLabel = null,
        round = true,
        width = size,
@@ -177,6 +185,12 @@ class CNPopupMenuButton extends StatefulWidget {
   /// Has no effect on icon-only buttons.
   final TextStyle? labelStyle;
 
+  /// What VoiceOver reads for the button, set on the native button.
+  ///
+  /// Use it when the visible label is drawn elsewhere (for example an empty
+  /// [buttonLabel] over Flutter text). `null` leaves the native default.
+  final String? accessibilityLabel;
+
   /// Whether this instance is configured as an icon button variant.
   bool get isIconButton =>
       buttonIcon != null ||
@@ -199,6 +213,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
   double? _intrinsicWidth;
   CNButtonStyle? _lastStyle;
   Map<String, dynamic>? _lastLabelStyle;
+  String? _lastAccessibilityLabel;
   Offset? _downPosition;
   bool _pressed = false;
 
@@ -417,6 +432,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
     final imageAssetFormats = <String>[];
     final isDivider = <bool>[];
     final enabled = <bool>[];
+    final checked = <bool>[];
     final sizes = <double?>[];
     final colors = <int?>[];
     final modes = <String?>[];
@@ -436,6 +452,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
         imageAssetFormats.add('');
         isDivider.add(true);
         enabled.add(false);
+        checked.add(false);
         sizes.add(null);
         colors.add(null);
         modes.add(null);
@@ -471,6 +488,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
 
         isDivider.add(false);
         enabled.add(e.enabled);
+        checked.add(e.checked);
         sizes.add(e.imageAsset?.size.width ?? e.icon?.size);
         colors.add(capturedMenuItemColors[i]);
         modes.add(e.imageAsset?.mode?.name ?? e.icon?.mode?.name);
@@ -515,6 +533,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
       'imageAssetFormats': imageAssetFormats,
       'isDivider': isDivider,
       'enabled': enabled,
+      'checked': checked,
       'sfSymbolSizes': sizes,
       'sfSymbolColors': colors,
       'sfSymbolRenderingModes': modes,
@@ -530,6 +549,8 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
         'buttonIconGradientEnabled': widget.buttonIcon!.gradient,
       'preserveTopToBottomOrder': widget.preserveTopToBottomOrder,
       if (capturedLabelStyle != null) 'labelStyle': capturedLabelStyle,
+      if (widget.accessibilityLabel != null)
+        'accessibilityLabel': widget.accessibilityLabel,
     };
 
     final platformView = buildCupertinoPlatformView(
@@ -603,6 +624,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
     _lastIconSize = widget.buttonIcon?.size;
     _lastIconColor = resolveColorToArgb(widget.buttonIcon?.color, context);
     _lastStyle = widget.buttonStyle;
+    _lastAccessibilityLabel = widget.accessibilityLabel;
     if (!widget.isIconButton) {
       _requestIntrinsicSize();
     }
@@ -637,6 +659,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
     final updSymbols = <String>[];
     final updIsDivider = <bool>[];
     final updEnabled = <bool>[];
+    final updChecked = <bool>[];
     final updSizes = <double?>[];
     final updColors = <int?>[];
     final updModes = <String?>[];
@@ -651,6 +674,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
         updSymbols.add('');
         updIsDivider.add(true);
         updEnabled.add(false);
+        updChecked.add(false);
         updSizes.add(null);
         updColors.add(null);
         updModes.add(null);
@@ -664,6 +688,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
         updSymbols.add(e.icon?.name ?? '');
         updIsDivider.add(false);
         updEnabled.add(e.enabled);
+        updChecked.add(e.checked);
         updSizes.add(e.imageAsset?.size.width ?? e.icon?.size);
         updColors.add(
           resolveColorToArgb(e.imageAsset?.color ?? e.icon?.color, context),
@@ -720,6 +745,13 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
     if (_lastLabelStyle != capturedLabelStyle) {
       await ch.invokeMethod('setTextStyle', capturedLabelStyle);
       _lastLabelStyle = capturedLabelStyle;
+    }
+    final accessibilityLabel = widget.accessibilityLabel;
+    if (_lastAccessibilityLabel != accessibilityLabel) {
+      _lastAccessibilityLabel = accessibilityLabel;
+      await ch.invokeMethod('setAccessibilityLabel', {
+        'label': accessibilityLabel,
+      });
     }
 
     if (widget.isIconButton) {
@@ -797,6 +829,7 @@ class _CNPopupMenuButtonState extends State<CNPopupMenuButton> {
       'sfSymbols': updSymbols,
       'isDivider': updIsDivider,
       'enabled': updEnabled,
+      'checked': updChecked,
       'sfSymbolSizes': updSizes,
       'sfSymbolColors': updColors,
       'sfSymbolRenderingModes': updModes,
