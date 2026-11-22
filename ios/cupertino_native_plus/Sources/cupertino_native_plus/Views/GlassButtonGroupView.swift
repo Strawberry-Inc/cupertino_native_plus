@@ -10,6 +10,8 @@ class GlassButtonGroupViewModel: ObservableObject {
   @Published var axis: Axis = .horizontal
   @Published var spacing: CGFloat = 8.0
   @Published var spacingForGlass: CGFloat = 40.0
+  /// Bumped when the view comes back on screen, to rebuild the buttons fresh.
+  @Published var generation: Int = 0
 }
 
 // MARK: - SwiftUI View
@@ -31,6 +33,9 @@ struct GlassButtonGroupSwiftUI: View {
     }
     .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .center)
     .ignoresSafeArea()
+    // A new identity drops any press (interactive glass) state that was frozen
+    // when the view left the window, so it does not replay on return.
+    .id(viewModel.generation)
   }
 
   @ViewBuilder
@@ -76,15 +81,31 @@ struct GlassButtonData: Identifiable {
 
 // MARK: - Platform View
 
+/// A container that reports when it leaves and comes back to a window.
+final class WindowTrackingView: UIView {
+  var onReturnToWindow: (() -> Void)?
+  private var leftWindow = false
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window == nil {
+      leftWindow = true
+    } else if leftWindow {
+      leftWindow = false
+      onReturnToWindow?()
+    }
+  }
+}
+
 @available(iOS 26.0, *)
 class GlassButtonGroupPlatformView: NSObject, FlutterPlatformView {
-  private let container: UIView
+  private let container: WindowTrackingView
   private let hostingController: UIHostingController<GlassButtonGroupSwiftUI>
   private let viewModel: GlassButtonGroupViewModel
   private let channel: FlutterMethodChannel
 
   init(frame: CGRect, viewId: Int64, args: Any?, messenger: FlutterBinaryMessenger) {
-    self.container = UIView(frame: frame)
+    self.container = WindowTrackingView(frame: frame)
     self.container.backgroundColor = .clear
     self.container.clipsToBounds = false
     self.container.insetsLayoutMarginsFromSafeArea = false
@@ -151,6 +172,17 @@ class GlassButtonGroupPlatformView: NSObject, FlutterPlatformView {
     container.addObserver(self, forKeyPath: "bounds", options: [.new, .old], context: nil)
 
     setupMethodChannel()
+
+    // Flutter removes a platform view from the window while it is not painted
+    // (e.g. hidden behind a menu). If that happens mid-press, the interactive
+    // glass freezes its pressed (enlarged) state and plays the release bounce
+    // when it is shown again. Rebuild the buttons on return so they come back
+    // at rest.
+    container.onReturnToWindow = { [weak viewModel] in
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) { viewModel?.generation += 1 }
+    }
   }
 
   func view() -> UIView { container }
