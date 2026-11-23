@@ -542,21 +542,35 @@ class CupertinoButtonPlatformView: NSObject, FlutterPlatformView {
       case "setButtonWidth":
         // The width given in creation params can change later (for example when
         // a tab's label grows); without this the glass keeps the old width.
+        // A new title may come in the same call, so the label never shows in
+        // the old width (truncated to "…"). Neither is animated: Flutter moves
+        // the views around the button at once, so the glass follows at once
+        // instead of stretching over the glass animation.
         let args = call.arguments as? [String: Any]
         let width = (args?["width"] as? NSNumber).map { CGFloat(truncating: $0) }
         let expandWidth = (args?["expandWidth"] as? NSNumber)?.boolValue
+        let title = args?["title"] as? String
         if usesSwiftUI, #available(iOS 26.0, *), let vm = self.buttonViewModel {
-          let old = vm.config
-          vm.config = GlassButtonConfig(
-            borderRadius: old.borderRadius,
-            padding: old.padding,
-            minHeight: old.minHeight,
-            spacing: old.spacing,
-            width: width,
-            // Without a fixed width the glass may need to fill the space again.
-            expandWidth: expandWidth ?? old.expandWidth,
-            contentAlignment: old.contentAlignment
-          )
+          var transaction = Transaction()
+          transaction.disablesAnimations = true
+          withTransaction(transaction) {
+            if let title = title { vm.title = title }
+            let old = vm.config
+            vm.config = GlassButtonConfig(
+              borderRadius: old.borderRadius,
+              padding: old.padding,
+              minHeight: old.minHeight,
+              spacing: old.spacing,
+              width: width,
+              // Without a fixed width the glass may need to fill the space again.
+              expandWidth: expandWidth ?? old.expandWidth,
+              contentAlignment: old.contentAlignment
+            )
+          }
+        } else if let title = title {
+          self.setButtonContent(
+            title: title, image: nil, iconOnly: false, imagePlacement: nil, imagePadding: nil,
+            horizontalPadding: nil)
         }
         result(nil)
       case "setButtonTitle":

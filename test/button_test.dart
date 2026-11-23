@@ -23,6 +23,13 @@ extension on FakePlatformViews {
         (call.arguments as Map<Object?, Object?>)['width'],
   ];
 
+  /// The titles sent to the view with `setButtonTitle`.
+  List<Object?> titles(int id) => [
+    for (final call in calls[id]!)
+      if (call.method == 'setButtonTitle')
+        (call.arguments as Map<Object?, Object?>)['title'],
+  ];
+
   /// The arguments of the `setButtonWidth` calls.
   List<Map<Object?, Object?>> widthCalls(int id) => [
     for (final call in calls[id]!)
@@ -38,6 +45,12 @@ Widget _button(CNButtonConfig config, {bool enabled = true}) => CupertinoApp(
       onPressed: enabled ? () {} : null,
       config: config,
     ),
+  ),
+);
+
+Widget _labeled(String label, CNButtonConfig config) => CupertinoApp(
+  home: Center(
+    child: CNButton(label: label, onPressed: () {}, config: config),
   ),
 );
 
@@ -376,6 +389,114 @@ void main() {
         await tester.pump();
 
         expect(views.widths(id), isEmpty);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+    );
+  });
+
+  group('CNButton の文字と幅を一緒に変えたとき', () {
+    testWidgets('文字と幅が一緒に変わったら、1 回でまとめて送る（長い文字が古い幅に入って「…」にならないように）', (
+      tester,
+    ) async {
+      final views = FakePlatformViews(tester);
+      await tester.pumpWidget(
+        _labeled('ToDo', const CNButtonConfig(width: 70, minHeight: 36)),
+      );
+      await tester.pump();
+      final id = views.onlyId;
+
+      // 例：タブの件数が後から読み込まれて、文字が長くなった
+      await tester.pumpWidget(
+        _labeled('ToDo  6', const CNButtonConfig(width: 87, minHeight: 36)),
+      );
+      await tester.pump();
+
+      expect(views.titles(id), isEmpty);
+      expect(views.widthCalls(id), hasLength(1));
+      expect(views.widthCalls(id).single['width'], 87);
+      expect(views.widthCalls(id).single['title'], 'ToDo  6');
+    }, variant: iOS);
+
+    testWidgets('幅だけが変わったときは、文字を送らない', (tester) async {
+      final views = FakePlatformViews(tester);
+      await tester.pumpWidget(
+        _labeled('ToDo', const CNButtonConfig(width: 70, minHeight: 36)),
+      );
+      await tester.pump();
+      final id = views.onlyId;
+
+      await tester.pumpWidget(
+        _labeled('ToDo', const CNButtonConfig(width: 87, minHeight: 36)),
+      );
+      await tester.pump();
+
+      expect(views.widthCalls(id).single.containsKey('title'), isFalse);
+    }, variant: iOS);
+
+    testWidgets('文字だけが変わったときは、これまでどおり文字だけを送る', (tester) async {
+      final views = FakePlatformViews(tester);
+      await tester.pumpWidget(
+        _labeled('ToDo', const CNButtonConfig(width: 70, minHeight: 36)),
+      );
+      await tester.pump();
+      final id = views.onlyId;
+
+      await tester.pumpWidget(
+        _labeled('Todo', const CNButtonConfig(width: 70, minHeight: 36)),
+      );
+      await tester.pump();
+
+      expect(views.titles(id), ['Todo']);
+      expect(views.widthCalls(id), isEmpty);
+    }, variant: iOS);
+
+    testWidgets('まとめた送信に失敗したら、次に同期するときに文字も送り直す', (tester) async {
+      final views = FakePlatformViews(tester);
+      await tester.pumpWidget(
+        _labeled('ToDo', const CNButtonConfig(width: 70, minHeight: 36)),
+      );
+      await tester.pump();
+      final id = views.onlyId;
+
+      views.failingMethods.add('setButtonWidth');
+      await tester.pumpWidget(
+        _labeled('ToDo  6', const CNButtonConfig(width: 87, minHeight: 36)),
+      );
+      await tester.pump();
+      expect(views.widthCalls(id), hasLength(1));
+
+      views.failingMethods.clear();
+      // 同じ設定のまま、次の同期が起きる
+      await tester.pumpWidget(
+        _labeled('ToDo  6', const CNButtonConfig(width: 87, minHeight: 36)),
+      );
+      await tester.pump();
+
+      final sent = [
+        ...views.titles(id),
+        for (final call in views.widthCalls(id).skip(1)) call['title'],
+      ];
+      expect(sent, contains('ToDo  6'));
+      expect(views.widthCalls(id).last['width'], 87);
+    }, variant: iOS);
+
+    testWidgets(
+      'macOS では幅を送らないので、文字はこれまでどおり文字だけで送る',
+      (tester) async {
+        final views = FakePlatformViews(tester);
+        await tester.pumpWidget(
+          _labeled('ToDo', const CNButtonConfig(width: 70, minHeight: 36)),
+        );
+        await tester.pump();
+        final id = views.onlyId;
+
+        await tester.pumpWidget(
+          _labeled('ToDo  6', const CNButtonConfig(width: 87, minHeight: 36)),
+        );
+        await tester.pump();
+
+        expect(views.titles(id), ['ToDo  6']);
+        expect(views.widthCalls(id), isEmpty);
       },
       variant: TargetPlatformVariant.only(TargetPlatform.macOS),
     );

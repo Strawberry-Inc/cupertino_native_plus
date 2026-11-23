@@ -627,10 +627,21 @@ class _CNButtonState extends State<CNButton> {
     await ch.invokeMethod('setEnabled', {
       'enabled': (widget.enabled && widget.onPressed != null),
     });
-    if (_lastTitle != widget.label && widget.label != null) {
-      await ch.invokeMethod('setButtonTitle', {'title': widget.label});
-      _lastTitle = widget.label;
-      _requestIntrinsicSize();
+    final label = widget.label;
+    var widthSynced = false;
+    if (_lastTitle != label && label != null) {
+      if (_widthNeedsSync) {
+        // A label that grows usually comes with a wider width. Send both in
+        // one call, or the new label shows in the old width for a moment
+        // (truncated to "…").
+        _lastTitle = label;
+        widthSynced = true;
+        await _syncWidthIfNeeded(ch, title: label);
+      } else {
+        await ch.invokeMethod('setButtonTitle', {'title': label});
+        _lastTitle = label;
+        _requestIntrinsicSize();
+      }
     }
     if (_lastImagePlacement != widget.config.imagePlacement) {
       await ch.invokeMethod('setImagePlacement', {
@@ -650,7 +661,7 @@ class _CNButtonState extends State<CNButton> {
       _lastImagePadding = widget.config.imagePadding;
       _requestIntrinsicSize();
     }
-    await _syncWidthIfNeeded(ch);
+    if (!widthSynced) await _syncWidthIfNeeded(ch);
     if (_lastPadding != widget.config.padding) {
       _requestIntrinsicSize();
       _lastPadding = widget.config.padding;
@@ -758,15 +769,21 @@ class _CNButtonState extends State<CNButton> {
     }
   }
 
+  /// Whether the width changed since it was last sent (only the iOS view can
+  /// change it).
+  bool get _widthNeedsSync =>
+      defaultTargetPlatform == TargetPlatform.iOS &&
+      (_widthUnknown || _lastWidth != widget.config.width);
+
   /// Sends the width if it changed since it was last sent.
   ///
   /// The width is read when the view is created; later changes (for example a
   /// label that grows) must be sent, or the native glass keeps the old width
-  /// and truncates the label. Only the iOS view can change it.
-  Future<void> _syncWidthIfNeeded(MethodChannel ch) async {
+  /// and truncates the label. Only the iOS view can change it. A [title] is
+  /// sent in the same call, so the view applies both at once.
+  Future<void> _syncWidthIfNeeded(MethodChannel ch, {String? title}) async {
     final width = widget.config.width;
-    if (defaultTargetPlatform != TargetPlatform.iOS) return;
-    if (!_widthUnknown && _lastWidth == width) return;
+    if (!_widthNeedsSync) return;
     // Record it before awaiting so a change back while this call is in
     // flight is still sent.
     _lastWidth = width;
@@ -775,11 +792,13 @@ class _CNButtonState extends State<CNButton> {
       await ch.invokeMethod('setButtonWidth', {
         'width': width,
         'expandWidth': _expandsWidth,
+        if (title != null) 'title': title,
       });
     } catch (_) {
       // The native width is unknown (null is a real width, so it can't mark
-      // this); send it again at the next sync.
+      // this); send it again at the next sync, with the title if it had one.
       _widthUnknown = true;
+      if (title != null && _lastTitle == title) _lastTitle = null;
       return;
     }
     _requestIntrinsicSize();
