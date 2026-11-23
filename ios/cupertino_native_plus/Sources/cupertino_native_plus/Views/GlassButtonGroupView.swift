@@ -12,6 +12,9 @@ class GlassButtonGroupViewModel: ObservableObject {
   @Published var spacingForGlass: CGFloat = 40.0
   /// Bumped when the view comes back on screen, to rebuild the buttons fresh.
   @Published var generation: Int = 0
+  /// When > 0, an update that changes a button's icon keeps the button and
+  /// cross-fades the icon over this many seconds (instead of replacing it).
+  var iconChangeDuration: Double = 0
 }
 
 // MARK: - SwiftUI View
@@ -54,7 +57,9 @@ struct GlassButtonGroupSwiftUI: View {
         namespace: namespace,
         config: button.config,
         imagePlacement: button.imagePlacement,
-        contentAlignment: button.contentAlignment
+        contentAlignment: button.contentAlignment,
+        iconRevision: button.iconRevision,
+        fadesIconChange: viewModel.iconChangeDuration > 0
       )
     }
   }
@@ -64,7 +69,11 @@ struct GlassButtonGroupSwiftUI: View {
 
 @available(iOS 26.0, *)
 struct GlassButtonData: Identifiable {
-  let id = UUID()
+  var id = UUID()
+  /// Bumped when the icon image changes (only used while cross-fading icons).
+  var iconRevision = 0
+  /// Identifies the icon image, to tell whether an update changes it.
+  var iconKey: Int? = nil
   let title: String?
   let iconConfig: IconConfig?
   let theme: CNButtonTheme
@@ -140,6 +149,9 @@ class GlassButtonGroupPlatformView: NSObject, FlutterPlatformView {
       if let v = dict["spacingForGlass"] as? NSNumber {
         viewModel.spacingForGlass = CGFloat(truncating: v)
       }
+      if let v = dict["iconChangeDuration"] as? NSNumber {
+        viewModel.iconChangeDuration = v.doubleValue / 1000
+      }
     }
 
     let swiftUIView = GlassButtonGroupSwiftUI(viewModel: viewModel)
@@ -205,7 +217,7 @@ class GlassButtonGroupPlatformView: NSObject, FlutterPlatformView {
           result(FlutterError(code: "bad_index", message: "Index out of range", details: nil))
           return
         }
-        self.viewModel.buttons[index] = Self.parseButtonData(from: dict, index: index, channel: self.channel)
+        self.replaceButton(at: index, with: Self.parseButtonData(from: dict, index: index, channel: self.channel))
         result(nil)
 
       case "updateButtons":
@@ -214,8 +226,13 @@ class GlassButtonGroupPlatformView: NSObject, FlutterPlatformView {
           result(FlutterError(code: "bad_args", message: "Missing buttons", details: nil))
           return
         }
-        self.viewModel.buttons = buttonsData.enumerated().map { index, d in
+        let parsed = buttonsData.enumerated().map { index, d in
           Self.parseButtonData(from: d, index: index, channel: self.channel)
+        }
+        if self.viewModel.iconChangeDuration > 0, parsed.count == self.viewModel.buttons.count {
+          for (index, data) in parsed.enumerated() { self.replaceButton(at: index, with: data) }
+        } else {
+          self.viewModel.buttons = parsed
         }
         result(nil)
 
@@ -231,6 +248,23 @@ class GlassButtonGroupPlatformView: NSObject, FlutterPlatformView {
       default:
         result(FlutterMethodNotImplemented)
       }
+    }
+  }
+
+  /// Replaces a button. While icons cross-fade, keeps the button (same id) so
+  /// only its icon changes, and animates the change.
+  private func replaceButton(at index: Int, with data: GlassButtonData) {
+    let duration = viewModel.iconChangeDuration
+    guard duration > 0 else {
+      viewModel.buttons[index] = data
+      return
+    }
+    var next = data
+    let old = viewModel.buttons[index]
+    next.id = old.id
+    next.iconRevision = old.iconRevision + (next.iconKey != old.iconKey ? 1 : 0)
+    withAnimation(.easeInOut(duration: duration)) {
+      viewModel.buttons[index] = next
     }
   }
 
@@ -314,6 +348,11 @@ class GlassButtonGroupPlatformView: NSObject, FlutterPlatformView {
     }
 
     return GlassButtonData(
+      iconKey: (processed["imageBytes"] as? Data).map { data in
+        var hasher = Hasher()
+        data.withUnsafeBytes { hasher.combine(bytes: $0) }
+        return hasher.finalize()
+      },
       title: title,
       iconConfig: iconConfig.hasIcon ? iconConfig : nil,
       theme: theme,

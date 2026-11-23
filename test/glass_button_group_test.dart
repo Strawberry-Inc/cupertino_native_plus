@@ -54,13 +54,18 @@ Widget _group(
   List<CNButtonData> buttons, {
   Brightness brightness = Brightness.light,
   Axis axis = Axis.horizontal,
+  Duration? iconChangeDuration,
 }) => CupertinoApp(
   theme: CupertinoThemeData(brightness: brightness),
   home: Center(
     child: SizedBox(
       width: 96,
       height: 44,
-      child: CNGlassButtonGroup(buttons: buttons, axis: axis),
+      child: CNGlassButtonGroup(
+        buttons: buttons,
+        axis: axis,
+        iconChangeDuration: iconChangeDuration,
+      ),
     ),
   ),
 );
@@ -70,6 +75,31 @@ void main() {
 
   setUp(() => PlatformVersion.debugShouldUseNativeGlassOverride = true);
   tearDown(() => PlatformVersion.debugShouldUseNativeGlassOverride = null);
+
+  group('CNGlassButtonGroup のアイコンの入れ替え', () {
+    testWidgets('入れ替えの時間を渡すと、ビューを作るときにミリ秒で渡す', (tester) async {
+      final views = FakePlatformViews(tester);
+      await tester.pumpWidget(
+        _group([
+          _button(_image(1)),
+        ], iconChangeDuration: const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      expect(views.created[views.onlyId]!['iconChangeDuration'], 100);
+    }, variant: iOS);
+
+    testWidgets('渡さなければ、ビューを作るときにも渡さない（今までどおり作り直す）', (tester) async {
+      final views = FakePlatformViews(tester);
+      await tester.pumpWidget(_group([_button(_image(1))]));
+      await tester.pump();
+
+      expect(
+        views.created[views.onlyId]!.containsKey('iconChangeDuration'),
+        isFalse,
+      );
+    }, variant: iOS);
+  });
 
   group('CNGlassButtonGroup のネイティブのビュー', () {
     testWidgets('できた後に変わったボタンだけを送る', (tester) async {
