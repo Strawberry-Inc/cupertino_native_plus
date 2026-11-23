@@ -64,6 +64,7 @@ class CNGlassButtonGroup extends StatefulWidget {
     this.axis = Axis.horizontal,
     this.spacing = 8.0,
     this.spacingForGlass = 40.0,
+    this.iconChangeDuration,
   }) : _buttonWidgets = null;
 
   /// Creates a group from existing CNButton widgets.
@@ -78,6 +79,7 @@ class CNGlassButtonGroup extends StatefulWidget {
     this.axis = Axis.horizontal,
     this.spacing = 8.0,
     this.spacingForGlass = 40.0,
+    this.iconChangeDuration,
   }) : buttons = const [],
        _buttonWidgets = buttonWidgets;
 
@@ -95,6 +97,10 @@ class CNGlassButtonGroup extends StatefulWidget {
 
   /// Spacing value for Liquid Glass blending (affects how glass effects merge).
   final double spacingForGlass;
+
+  /// When set (iOS 26+), a later update that changes a button's icon keeps the
+  /// button and cross-fades the icon over this duration.
+  final Duration? iconChangeDuration;
 
   /// Returns the effective button count (from data or widgets).
   int get _effectiveButtonCount =>
@@ -267,6 +273,8 @@ class _CNGlassButtonGroupState extends State<CNGlassButtonGroup> {
           'spacing': widget.spacing,
           'spacingForGlass': widget.spacingForGlass,
           'isDark': isDark,
+          if (widget.iconChangeDuration != null)
+            'iconChangeDuration': widget.iconChangeDuration!.inMilliseconds,
         };
 
         final platformView = _PlatformViewMount(

@@ -19,6 +19,10 @@ struct GlassButtonSwiftUI: View {
   let imagePlacement: String
   /// Content alignment along the main axis. Matches Flutter's MainAxisAlignment names.
   let contentAlignment: String
+  /// Changes when the icon image changes; with [fadesIconChange] the old and
+  /// new icon cross-fade in the transaction's animation.
+  var iconRevision: Int = 0
+  var fadesIconChange: Bool = false
 
   private var effectiveLabelColor: Color? { theme.effectiveLabelColor }
   private var effectiveIconColor: Color? { theme.effectiveIconColor }
@@ -91,7 +95,15 @@ struct GlassButtonSwiftUI: View {
   @ViewBuilder
   private var iconView: some View {
     if let ic = iconConfig, let asset = ic.asset {
-      resolvedIconView(ic: ic, asset: asset)
+      if fadesIconChange {
+        ZStack {
+          resolvedIconView(ic: ic, asset: asset)
+            .id(iconRevision)
+            .transition(.opacity)
+        }
+      } else {
+        resolvedIconView(ic: ic, asset: asset)
+      }
     }
   }
 
